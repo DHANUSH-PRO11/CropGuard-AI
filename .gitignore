@@ -1,0 +1,45 @@
+node_modules/
+frontend/node_modules/
+backend/__pycache__/
+__pycache__/
+*.pyc
+
+.env
+.env.*
+!.env.example
+
+venv/
+.venv/
+
+dist/
+build/
+
+.vscode/
+
+.DS_Store
+
+*.log
+
+# Evaluation dataset files
+backend/evaluation/data/
+evaluation_results.json
+per_class_metrics.csv
+backend/evaluation/results/
+
+# Phase 4C experimental training data and checkpoints
+backend/training/phase4c/data/
+backend/training/phase4c/checkpoints/
+
+# Model backups
+*.bak
+backend/models/*.bak
+
+# Local databases and uploads
+*.db
+uploads/
+
+# Local test audio files
+*.wav
+*.mp3
+*.m4a
+
