@@ -4,6 +4,7 @@ import logging
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from supabase import Client
 from config.database import get_supabase
+from config import local_db
 from schemas import schemas
 from services.ai.disease_detector import DiseaseDetector
 from datetime import datetime
@@ -50,6 +51,7 @@ async def analyze_crop(
         raise HTTPException(status_code=500, detail=f"Crop analysis failed: {str(e)}")
         
     public_url = None
+    saved_to_supabase = False
     if db is not None:
         try:
             # Upload to Supabase Storage
@@ -70,11 +72,23 @@ async def analyze_crop(
             }
             
             db.table("crop_analyses").insert(db_record).execute()
+            saved_to_supabase = True
             logger.info("Crop analysis record saved to Supabase.")
         except Exception as e:
             logger.warning(f"Failed to save crop analysis to Supabase: {str(e)}")
-    else:
-        logger.info("Supabase not configured; analysis completed in local memory mode.")
+
+    # Always save to local fallback db as well for offline resilience
+    try:
+        local_db.save_crop_analysis({
+            "crop_type": prediction.get("crop", "Unknown"),
+            "image_path": public_url or file_path,
+            "detected_disease": prediction.get("condition", "Unknown"),
+            "confidence": float(prediction.get("confidence", 0.0)),
+            "severity": prediction.get("severity", "Not determined"),
+            "risk_level": prediction.get("risk", "Not determined")
+        })
+    except Exception as e:
+        logger.warning(f"Failed to save to local db: {e}")
     
     # Optionally remove local file
     try:
@@ -87,13 +101,37 @@ async def analyze_crop(
 
 @router.get("/history", response_model=List[schemas.CropAnalysisResponse])
 def get_crop_history(db: Optional[Client] = Depends(get_supabase)):
-    """Retrieve history of saved crop analyses from Supabase."""
-    if db is None:
-        return []
+    """Retrieve history of saved crop analyses from Supabase or local fallback database."""
+    records = []
+    if db is not None:
+        try:
+            res = db.table("crop_analyses").select("*").order("created_at", desc=True).limit(20).execute()
+            for row in res.data or []:
+                records.append({
+                    "crop": row.get("crop_type", "Unknown"),
+                    "condition": row.get("detected_disease", "Unknown"),
+                    "confidence": float(row.get("confidence", 0.0)),
+                    "is_healthy": "healthy" in row.get("detected_disease", "").lower(),
+                    "status": "High confidence" if float(row.get("confidence", 0.0)) >= 0.7 else "Uncertain",
+                    "top_predictions": [],
+                    "severity": row.get("severity", "Not determined"),
+                    "risk": row.get("risk_level", "Not determined"),
+                    "quality_status": "Passed",
+                    "warning_message": None,
+                    "uncertainty_reason": None,
+                    "latency_ms": None,
+                    "preprocessing_mode": "direct",
+                    "tta_enabled": False
+                })
+            if records:
+                return records
+        except Exception as e:
+            logger.warning(f"Failed to fetch history from Supabase: {e}")
+
+    # Fallback to local DB history
     try:
-        res = db.table("crop_analyses").select("*").order("created_at", desc=True).limit(20).execute()
-        records = []
-        for row in res.data or []:
+        local_records = local_db.get_recent_crop_analyses(limit=20)
+        for row in local_records:
             records.append({
                 "crop": row.get("crop_type", "Unknown"),
                 "condition": row.get("detected_disease", "Unknown"),
@@ -110,10 +148,10 @@ def get_crop_history(db: Optional[Client] = Depends(get_supabase)):
                 "preprocessing_mode": "direct",
                 "tta_enabled": False
             })
-        return records
     except Exception as e:
-        logger.warning(f"Failed to fetch history from Supabase: {e}")
-        return []
+        logger.warning(f"Failed to fetch local crop history: {e}")
+
+    return records
 
 
 

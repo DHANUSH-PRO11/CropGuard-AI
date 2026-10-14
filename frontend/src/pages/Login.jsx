@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Leaf, Eye, EyeOff, Lock, Mail, User, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Leaf, Eye, EyeOff, Lock, Mail, User, ArrowRight, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import AgroNexGoogleLogin from '../features/googleAuth/GoogleLogin';
+import { API_BASE_URL } from '../config/api';
 
 export default function Login() {
   const { t, i18n } = useTranslation();
@@ -12,15 +13,79 @@ export default function Login() {
 
   const isRegister = location.pathname.includes('register');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     identifier: '',
     password: '',
   });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    navigate('/dashboard');
+    setIsLoading(true);
+    setErrorMsg(null);
+
+    const isEmail = formData.identifier.includes('@');
+    const endpoint = isRegister ? `${API_BASE_URL}/api/auth/register` : `${API_BASE_URL}/api/auth/login`;
+
+    const payload = isRegister
+      ? {
+          name: formData.name.trim() || 'Farmer',
+          mobile: isEmail ? '9876543210' : formData.identifier.trim(),
+          email: isEmail ? formData.identifier.trim() : null,
+          password: formData.password,
+          preferred_language: i18n.language || 'en'
+        }
+      : {
+          username: formData.identifier.trim(),
+          password: formData.password
+        };
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Authentication failed. Please check your credentials.');
+      }
+
+      if (isRegister) {
+        // Auto-login after successful registration
+        const loginRes = await fetch(`${API_BASE_URL}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: formData.identifier.trim(),
+            password: formData.password
+          })
+        });
+        const loginData = await loginRes.json();
+        if (loginData.access_token) {
+          localStorage.setItem('agronex_token', loginData.access_token);
+          localStorage.setItem('agronex_user', JSON.stringify(loginData.user || data));
+        }
+      } else {
+        if (data.access_token) {
+          localStorage.setItem('agronex_token', data.access_token);
+        }
+        if (data.user) {
+          localStorage.setItem('agronex_user', JSON.stringify(data.user));
+        }
+      }
+
+      navigate('/dashboard');
+    } catch (err) {
+      console.error('Auth error:', err);
+      setErrorMsg(err.message || 'An error occurred during authentication.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -53,6 +118,15 @@ export default function Login() {
             }
           </p>
         </div>
+
+        {/* Error message banner */}
+        {errorMsg && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-2 text-red-800 text-xs font-semibold animate-fadeIn">
+            <AlertCircle size={16} className="text-red-600 flex-shrink-0" />
+            <span className="flex-1">{errorMsg}</span>
+            <button type="button" onClick={() => setErrorMsg(null)} className="text-red-500 hover:text-red-700 font-bold ml-1">✕</button>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -141,10 +215,20 @@ export default function Login() {
           {/* Submit CTA */}
           <button
             type="submit"
-            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-[0.98] text-white py-3.5 rounded-2xl font-bold flex justify-center items-center gap-2 mt-6 transition-all shadow-md shadow-emerald-600/20 text-sm"
+            disabled={isLoading}
+            className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-[0.98] text-white py-3.5 rounded-2xl font-bold flex justify-center items-center gap-2 mt-6 transition-all shadow-md shadow-emerald-600/20 text-sm disabled:opacity-60 cursor-pointer"
           >
-            <span>{isRegister ? t('register') : t('login')}</span>
-            <ArrowRight size={17} />
+            {isLoading ? (
+              <>
+                <Loader2 size={17} className="animate-spin" />
+                <span>{isRegister ? (i18n.language === 'ta' ? 'பதிவாகிறது...' : 'Creating account...') : (i18n.language === 'ta' ? 'உள்நுழைகிறது...' : 'Logging in...')}</span>
+              </>
+            ) : (
+              <>
+                <span>{isRegister ? t('register') : t('login')}</span>
+                <ArrowRight size={17} />
+              </>
+            )}
           </button>
         </form>
 
@@ -159,7 +243,14 @@ export default function Login() {
 
 	{/* Google / Quick SSO */}
 	<div className="mt-5 flex justify-center">
-        <AgroNexGoogleLogin onSuccess={() => navigate('/dashboard')} />
+        <AgroNexGoogleLogin
+          onSuccess={(res) => {
+            if (res?.user) {
+              localStorage.setItem('agronex_user', JSON.stringify(res.user));
+            }
+            navigate('/dashboard');
+          }}
+        />
 	</div>
 
         {/* Toggle between Login and Register */}

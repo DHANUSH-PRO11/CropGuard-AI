@@ -70,16 +70,51 @@ export default function Layout() {
             })}
           </nav>
 
-          {/* Right Action: Language Switcher */}
-          <div className="flex items-center gap-2.5">
+          {/* Right Action: Language Switcher & User Profile */}
+          <div className="flex items-center gap-2">
             <button 
               onClick={toggleLanguage}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-emerald-50/80 border border-emerald-200/60 text-emerald-900 rounded-full hover:bg-emerald-100 hover:scale-105 active:scale-95 transition-all shadow-xs"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-emerald-50/80 border border-emerald-200/60 text-emerald-900 rounded-full hover:bg-emerald-100 hover:scale-105 active:scale-95 transition-all shadow-xs cursor-pointer"
               title="Change Language"
             >
               <Languages size={14} className="text-emerald-700" />
               <span>{i18n.language === 'en' ? 'தமிழ்' : 'English'}</span>
             </button>
+
+            {(() => {
+              const savedUser = localStorage.getItem('agronex_user');
+              const userObj = savedUser ? JSON.parse(savedUser) : null;
+              if (userObj) {
+                return (
+                  <div className="flex items-center gap-1.5">
+                    <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-gray-50 border border-gray-200 rounded-full text-xs font-semibold text-gray-700">
+                      <User size={13} className="text-emerald-600" />
+                      <span className="truncate max-w-[100px]">{userObj.name || 'Farmer'}</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        localStorage.removeItem('agronex_user');
+                        localStorage.removeItem('agronex_token');
+                        window.location.reload();
+                      }}
+                      className="text-xs px-2.5 py-1 text-gray-400 hover:text-red-600 font-medium transition-colors"
+                      title="Log Out"
+                    >
+                      {i18n.language === 'ta' ? 'வெளியேறு' : 'Logout'}
+                    </button>
+                  </div>
+                );
+              }
+              return (
+                <Link
+                  to="/login"
+                  className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-full hover:shadow-xs transition-all"
+                >
+                  <User size={13} />
+                  <span>{t('login')}</span>
+                </Link>
+              );
+            })()}
           </div>
         </div>
       </header>

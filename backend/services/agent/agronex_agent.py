@@ -201,6 +201,25 @@ class AgroNexAgent:
                 )
 
         # ---------------------------------------------------------
+        # Node 4b: Tool Execution — Government Agricultural Schemes
+        # ---------------------------------------------------------
+        schemes_data: List[Dict[str, Any]] = []
+        if should_run_schemes:
+            node_start_sch = time.perf_counter()
+            tools_called.append("schemes_provider")
+            try:
+                from api.schemes import AGRICULTURAL_SCHEMES
+                schemes_data = AGRICULTURAL_SCHEMES
+                log_node(
+                    "schemes_provider",
+                    "completed",
+                    {"schemes_matched": len(schemes_data)},
+                    (time.perf_counter() - node_start_sch) * 1000
+                )
+            except Exception as e:
+                logger.warning(f"Schemes lookup failed: {e}")
+
+        # ---------------------------------------------------------
         # Node 5: Context Assembly & Uncertainty Gatekeeping
         # ---------------------------------------------------------
         node_start = time.perf_counter()
@@ -239,6 +258,9 @@ class AgroNexAgent:
 
             context_packet["spray_advisory"] = spray_advisory
 
+        if schemes_data:
+            context_packet["schemes"] = schemes_data
+
         # Uncertainty gatekeeper rule
         requires_expert_confirmation = False
         if crop_prediction:
@@ -253,7 +275,8 @@ class AgroNexAgent:
             "completed",
             {
                 "spray_advisory": spray_advisory,
-                "requires_expert_confirmation": requires_expert_confirmation
+                "requires_expert_confirmation": requires_expert_confirmation,
+                "schemes_active": bool(schemes_data)
             },
             (time.perf_counter() - node_start) * 1000
         )

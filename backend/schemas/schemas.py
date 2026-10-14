@@ -1,11 +1,11 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Union, Any
 from datetime import datetime
 
 class UserBase(BaseModel):
     name: str
     mobile: str
-    email: Optional[EmailStr] = None
+    email: Optional[str] = None
     location: Optional[str] = None
     preferred_language: Optional[str] = "en"
 
@@ -17,9 +17,24 @@ class UserLogin(BaseModel):
     password: str
 
 class UserResponse(UserBase):
-    id: int
-    class Config:
-        from_attributes = True
+    id: Union[int, str]
+    model_config = {"from_attributes": True}
+
+class FarmerProfileResponse(BaseModel):
+    name: Optional[str] = "Farmer"
+    mobile: Optional[str] = None
+    location: Optional[str] = None
+    farm_size: Optional[float] = None
+    primary_crop: Optional[str] = None
+    preferred_language: Optional[str] = "en"
+
+class FarmerProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    mobile: Optional[str] = None
+    location: Optional[str] = None
+    farm_size: Optional[float] = None
+    primary_crop: Optional[str] = None
+    preferred_language: Optional[str] = None
 
 class Token(BaseModel):
     access_token: str

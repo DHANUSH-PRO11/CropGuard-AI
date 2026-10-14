@@ -111,7 +111,7 @@ export default function Assistant() {
         }
       ]);
     }
-  }, [initialContext]);
+  }, [initialContext, i18n.language]);
 
 
   // Helper: Encode raw Float32 audio samples into standard 16kHz mono 16-bit PCM WAV Blob
@@ -185,7 +185,7 @@ export default function Assistant() {
     return new Blob([view], { type: 'audio/wav' });
   };
 
-  const cleanupAudioRecording = () => {
+  function cleanupAudioRecording() {
     isRecordingRef.current = false;
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
@@ -209,7 +209,7 @@ export default function Assistant() {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
-  };
+  }
 
   const formatTimer = (totalSeconds) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -263,14 +263,14 @@ export default function Assistant() {
     }
   };
 
-  const closeLiveCamera = () => {
+  function closeLiveCamera() {
     if (cameraStreamRef.current) {
       cameraStreamRef.current.getTracks().forEach(t => t.stop());
       cameraStreamRef.current = null;
     }
     setIsCameraOpen(false);
     setCameraActive(false);
-  };
+  }
 
   const switchCameraFacing = () => {
     const nextFacing = cameraFacing === 'environment' ? 'user' : 'environment';

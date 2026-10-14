@@ -14,12 +14,6 @@ export default function Weather() {
   const [searchQuery, setSearchQuery] = useState("");
   const isTamil = i18n.language === 'ta';
 
-  useEffect(() => {
-    if (location?.latitude && location?.longitude) {
-      fetchWeather(location.latitude, location.longitude);
-    }
-  }, [location]);
-
   const fetchWeather = async (lat, lon) => {
     setWeatherLoading(true);
     try {
@@ -34,6 +28,12 @@ export default function Weather() {
       setWeatherLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (location?.latitude && location?.longitude) {
+      fetchWeather(location.latitude, location.longitude);
+    }
+  }, [location]);
 
   const handleSearch = async (e) => {
     e.preventDefault();

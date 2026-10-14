@@ -88,6 +88,12 @@ class AIAssistant:
         if "spray_advisory" in context:
             parts.append(f"- Spray Window Feasibility: {context['spray_advisory']}")
 
+        if "schemes" in context and isinstance(context["schemes"], list):
+            sch_items = []
+            for s in context["schemes"][:3]:
+                sch_items.append(f"{s.get('name')}: {s.get('benefits')}")
+            parts.append(f"- Matched Government Schemes: {'; '.join(sch_items)}")
+
         parts.append("----------------------------------------------------------------\n")
         return "\n".join(parts)
 
@@ -98,6 +104,26 @@ class AIAssistant:
         cond = context.get("condition", "ஆரோக்கியமானது" if is_tamil else "Healthy") if context else ""
         weather = context.get("weather", {}) if context else {}
         alerts = weather.get("alerts", []) if isinstance(weather, dict) else []
+        schemes = context.get("schemes", []) if context and isinstance(context.get("schemes"), list) else []
+
+        if schemes:
+            sch = schemes[0]
+            if is_tamil:
+                return (
+                    f"அரசு விவசாய திட்டம் வழிகாட்டல்:\n"
+                    f"• திட்டம்: {sch.get('name_ta', sch.get('name'))}\n"
+                    f"• பயன்கள்: {sch.get('benefits_ta', sch.get('benefits'))}\n"
+                    f"• தகுதி: {sch.get('eligibility_ta', sch.get('eligibility'))}\n"
+                    f"• கூடுதல் விவரம் & விண்ணப்பிக்க: {sch.get('source')}"
+                )
+            else:
+                return (
+                    f"Government Agricultural Scheme Guidance:\n"
+                    f"• Scheme: {sch.get('name')}\n"
+                    f"• Benefits: {sch.get('benefits')}\n"
+                    f"• Eligibility: {sch.get('eligibility')}\n"
+                    f"• Official Portal: {sch.get('source')}"
+                )
 
         if is_tamil:
             lines = [f"அக்ரோநெக்ஸ் விவசாய வழிகாட்டல்:"]

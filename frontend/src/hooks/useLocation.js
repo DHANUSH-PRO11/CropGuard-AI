@@ -33,7 +33,7 @@ export function useLocation() {
           const newLoc = {
             latitude,
             longitude,
-            city: data.city || data.locality || "Unknown City",
+            city: data.city || data.locality || "Your Farm",
             state: data.principalSubdivision || "",
             country: data.countryName || ""
           };
@@ -41,15 +41,35 @@ export function useLocation() {
           localStorage.setItem('agronex_location', JSON.stringify(newLoc));
           setLoading(false);
         } catch (err) {
-          setError("Failed to determine city name.");
+          console.warn("Reverse geocode failed, using coordinates:", err);
+          const fallbackLoc = {
+            latitude,
+            longitude,
+            city: "Your Farm",
+            state: "Tamil Nadu",
+            country: "India"
+          };
+          setLocation(fallbackLoc);
+          localStorage.setItem('agronex_location', JSON.stringify(fallbackLoc));
           setLoading(false);
         }
       },
       (err) => {
-        setError("Location access denied. Please enable location or choose manually.");
+        // Fallback to regional agricultural center (Coimbatore, Tamil Nadu)
+        console.warn("Location access denied or timed out, using regional default:", err);
+        const defaultLoc = {
+          latitude: 11.0168,
+          longitude: 76.9558,
+          city: "Coimbatore",
+          state: "Tamil Nadu",
+          country: "India"
+        };
+        setLocation(defaultLoc);
+        localStorage.setItem('agronex_location', JSON.stringify(defaultLoc));
+        setError(null);
         setLoading(false);
       },
-      { timeout: 10000 }
+      { timeout: 8000 }
     );
   };
 

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ShieldAlert, AlertTriangle, ArrowLeft, CheckCircle, Bot, Sparkles, Share2, ArrowRight, Volume2, VolumeX, Loader2, ChevronDown, ChevronUp, Activity } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle, Bot, ArrowRight, Volume2, VolumeX, Loader2, ChevronDown, ChevronUp, Activity } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import WeatherAlerts from '../components/WeatherAlerts';
 import { API_BASE_URL } from '../config/api';
@@ -18,6 +18,7 @@ export default function Result() {
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const [showTrace, setShowTrace] = useState(false);
   const [activeQuestion, setActiveQuestion] = useState("");
+  const [reportId] = useState(() => Math.floor(Date.now() / 1000).toString().slice(-6));
   const audioPlayerRef = useRef(null);
 
   if (!result) {
@@ -117,7 +118,7 @@ export default function Result() {
           <span>{isTamil ? "முகப்புக்குத் திரும்பு" : "Dashboard"}</span>
         </Link>
         <span className="text-[11px] font-semibold text-gray-400">
-          ID: #{Math.floor(Date.now() / 1000).toString().slice(-6)}
+          ID: #{reportId}
         </span>
       </div>
 

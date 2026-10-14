@@ -9,6 +9,7 @@ from services.weather_alert_service import WeatherAlertService
 class WeatherService:
     def __init__(self):
         self.alert_service = WeatherAlertService()
+        self._cache: Dict[str, Any] = {}
         
     def get_weather(self, lat: float, lon: float, crop: str = None, condition: str = None) -> Dict[str, Any]:
         base_url = "https://api.open-meteo.com/v1/forecast"
@@ -27,8 +28,11 @@ class WeatherService:
         url = f"{base_url}?{query_string}"
         
         try:
-            req = urllib.request.Request(url, headers={'User-Agent': 'AgroNex/1.0'})
-            with urllib.request.urlopen(req) as response:
+            req = urllib.request.Request(
+                url,
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 AgroNex/1.0'}
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
                 data = json.loads(response.read().decode())
                 
             current = data.get("current", {})
@@ -80,7 +84,7 @@ class WeatherService:
                         "precipitation_probability": hourly["precipitation_probability"][i],
                     })
             
-            return {
+            result = {
                 "success": True,
                 "location": {
                     "latitude": lat,
@@ -100,7 +104,17 @@ class WeatherService:
                 "forecast": forecast,
                 "alerts": alerts
             }
-        except urllib.error.URLError as e:
+            cache_key = f"{round(lat, 2)}_{round(lon, 2)}"
+            self._cache[cache_key] = result
+            self._cache["_last"] = result
+            return result
+        except (urllib.error.URLError, Exception) as e:
+            cache_key = f"{round(lat, 2)}_{round(lon, 2)}"
+            cached = self._cache.get(cache_key) or self._cache.get("_last")
+            if cached:
+                fallback = dict(cached)
+                fallback["cached"] = True
+                return fallback
             return {
                 "success": False,
                 "error": "Weather information is temporarily unavailable.",

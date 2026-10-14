@@ -12,12 +12,6 @@ export default function LocationWeatherCard() {
   const [weatherLoading, setWeatherLoading] = useState(false);
   const isTamil = i18n.language === 'ta';
 
-  useEffect(() => {
-    if (location && location.latitude && location.longitude) {
-      fetchWeather(location.latitude, location.longitude);
-    }
-  }, [location]);
-
   const fetchWeather = async (lat, lon) => {
     setWeatherLoading(true);
     try {
@@ -32,6 +26,12 @@ export default function LocationWeatherCard() {
       setWeatherLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (location && location.latitude && location.longitude) {
+      fetchWeather(location.latitude, location.longitude);
+    }
+  }, [location]);
 
   if (locLoading) {
     return (
