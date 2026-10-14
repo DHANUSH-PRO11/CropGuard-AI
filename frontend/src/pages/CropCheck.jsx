@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Camera, Image as ImageIcon, CheckCircle, AlertTriangle, Sparkles, RefreshCw, Upload, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../config/api';
 
 export default function CropCheck() {
   const { t, i18n } = useTranslation();
@@ -60,7 +61,7 @@ export default function CropCheck() {
     formData.append('file', fileObj);
     
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const apiUrl = API_BASE_URL;
       const response = await fetch(`${apiUrl}/api/crops/analyze`, {
         method: 'POST',
         body: formData,

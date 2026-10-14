@@ -3,13 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { ShieldAlert, AlertTriangle, ArrowLeft, CheckCircle, Bot, Sparkles, Share2, ArrowRight, Volume2, VolumeX, Loader2, ChevronDown, ChevronUp, Activity } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import WeatherAlerts from '../components/WeatherAlerts';
+import { API_BASE_URL } from '../config/api';
 
 export default function Result() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
   const { result, imageUrl } = location.state || {};
   const isTamil = i18n.language === 'ta';
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const apiUrl = API_BASE_URL;
 
   const [copilotLoading, setCopilotLoading] = useState(false);
   const [copilotReply, setCopilotReply] = useState(null);

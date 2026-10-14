@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, MapPin, Search, CloudRain, Wind, ThermometerSun, AlertTriangle, CloudSun, Droplets, Sunrise, Sunset } from 'lucide-react';
 import { useLocation } from '../hooks/useLocation';
+import { API_BASE_URL } from '../config/api';
 
 export default function Weather() {
   const { t, i18n } = useTranslation();
@@ -22,7 +23,7 @@ export default function Weather() {
   const fetchWeather = async (lat, lon) => {
     setWeatherLoading(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const apiUrl = API_BASE_URL;
       const response = await fetch(`${apiUrl}/api/weather/forecast?lat=${lat}&lon=${lon}`);
       if (response.ok) {
         setWeather(await response.json());

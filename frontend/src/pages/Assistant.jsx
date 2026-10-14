@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
+import { API_BASE_URL } from '../config/api';
 import { 
   Send, 
   Mic, 
@@ -26,7 +27,7 @@ import {
 export default function Assistant() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const apiUrl = API_BASE_URL;
   const initialContext = location.state?.initialCropContext;
 
 

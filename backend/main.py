@@ -9,7 +9,11 @@ app = FastAPI(title="AgroNex API", description="Smart Farming Backend with Auton
 # Determine allowed origins based on environment variable
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
 origins = [frontend_url]
-if os.getenv("ALLOW_ALL_ORIGINS") == "true":
+if os.getenv("VERCEL_URL"):
+    origins.append(f"https://{os.getenv('VERCEL_URL')}")
+if os.getenv("VERCEL_PROJECT_PRODUCTION_URL"):
+    origins.append(f"https://{os.getenv('VERCEL_PROJECT_PRODUCTION_URL')}")
+if os.getenv("ALLOW_ALL_ORIGINS", "true").lower() in ("true", "1"):
     origins = ["*"]
 
 # CORS
@@ -33,9 +37,11 @@ app.include_router(profile.router, prefix="/api/profile", tags=["Profile"])
 
 
 @app.get("/")
+@app.get("/api")
 def read_root():
     return {"message": "Welcome to AgroNex API"}
 
 @app.get("/health")
+@app.get("/api/health")
 def health_check():
     return {"status": "ok"}

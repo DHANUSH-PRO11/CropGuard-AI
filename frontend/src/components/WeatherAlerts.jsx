@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CloudSun, CloudRain, Wind, AlertTriangle, ThermometerSun, CheckCircle, MapPin, RefreshCw } from 'lucide-react';
+import { API_BASE_URL } from '../config/api';
 
 export default function WeatherAlerts({ crop, condition }) {
   const { t, i18n } = useTranslation();
@@ -30,7 +31,7 @@ export default function WeatherAlerts({ crop, condition }) {
           const lat = position.coords.latitude;
           const lon = position.coords.longitude;
           
-          const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          const apiUrl = API_BASE_URL;
           let url = `${apiUrl}/api/weather/forecast?lat=${lat}&lon=${lon}`;
           if (crop) url += `&crop=${encodeURIComponent(crop)}`;
           if (condition) url += `&condition=${encodeURIComponent(condition)}`;

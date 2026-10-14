@@ -3,9 +3,9 @@
  * Reads Vite environment variable VITE_GOOGLE_CLIENT_ID
  */
 
-export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+import { API_BASE_URL } from '../../config/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 /**
  * Sends the Google ID token credential to the backend verification endpoint.
