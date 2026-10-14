@@ -31,11 +31,12 @@ async def run_agent_workflow(
     latitude: Optional[float] = Form(None),
     longitude: Optional[float] = Form(None),
     language: Optional[str] = Form("en"),
+    context: Optional[str] = Form(None),
     db: Optional[Client] = Depends(get_supabase)
 ):
     """
     Multimodal entrypoint for AgroNex Agent.
-    Accepts text queries, plant leaf images, farmer voice audio, and coordinates.
+    Accepts text queries, plant leaf images, farmer voice audio, coordinates, and context.
     Runs the 10-step AgentFoundry workflow.
     """
     image_bytes = None
@@ -52,6 +53,13 @@ async def run_agent_workflow(
         audio_bytes = await audio.read()
         audio_filename = audio.filename
 
+    parsed_context = None
+    if context:
+        try:
+            parsed_context = json.loads(context)
+        except Exception:
+            parsed_context = {"raw_context": context}
+
     result = agent.run(
         query=query,
         image_bytes=image_bytes,
@@ -62,7 +70,8 @@ async def run_agent_workflow(
         latitude=latitude,
         longitude=longitude,
         language=language or "en",
-        db_client=db
+        db_client=db,
+        context=parsed_context
     )
     return result
 
@@ -80,7 +89,8 @@ def run_agent_chat(
         latitude=req.latitude,
         longitude=req.longitude,
         language=req.language or "en",
-        db_client=db
+        db_client=db,
+        context=req.context
     )
     return result
 

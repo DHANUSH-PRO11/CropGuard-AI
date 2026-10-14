@@ -192,6 +192,28 @@ export default function Result() {
             </div>
           </div>
 
+          {/* Differential Diagnoses / Alternative Possibilities */}
+          {top_predictions && top_predictions.length > 1 && (
+            <div className="bg-gray-50/90 p-4 rounded-2xl border border-gray-100 space-y-2">
+              <div className="flex justify-between items-center text-xs font-bold text-gray-700">
+                <span>{isTamil ? "மாற்று கணிப்புகள் (Differential Diagnoses)" : "Differential Diagnoses"}</span>
+                <span className="text-[11px] text-gray-400 font-normal">Top {top_predictions.length} ranked</span>
+              </div>
+              <div className="space-y-1.5">
+                {top_predictions.slice(1, 4).map((pred, idx) => {
+                  const pName = (pred.class_name || "").replace(/___/g, " — ").replace(/_/g, " ");
+                  const pPct = ((pred.confidence || 0) * 100).toFixed(1);
+                  return (
+                    <div key={idx} className="flex justify-between items-center text-xs text-gray-600 bg-white p-2 rounded-xl border border-gray-100/80">
+                      <span className="truncate pr-2 font-medium">{pName}</span>
+                      <span className="font-bold text-gray-700 flex-shrink-0">{pPct}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Actionable Recommendations Checklist */}
           <div>
             <h3 className="font-bold text-sm text-agronex-deep mb-2 font-display">

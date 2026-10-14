@@ -18,6 +18,8 @@ export default function Login() {
   const [formData, setFormData] = useState({
     name: '',
     identifier: '',
+    mobile: '',
+    email: '',
     password: '',
   });
 
@@ -26,14 +28,21 @@ export default function Login() {
     setIsLoading(true);
     setErrorMsg(null);
 
-    const isEmail = formData.identifier.includes('@');
     const endpoint = isRegister ? `${API_BASE_URL}/api/auth/register` : `${API_BASE_URL}/api/auth/login`;
+
+    const cleanMobile = isRegister
+      ? formData.mobile.trim()
+      : formData.identifier.trim();
+
+    const cleanEmail = isRegister && formData.email.trim()
+      ? formData.email.trim().toLowerCase()
+      : null;
 
     const payload = isRegister
       ? {
           name: formData.name.trim() || 'Farmer',
-          mobile: isEmail ? '9876543210' : formData.identifier.trim(),
-          email: isEmail ? formData.identifier.trim() : null,
+          mobile: cleanMobile,
+          email: cleanEmail,
           password: formData.password,
           preferred_language: i18n.language || 'en'
         }
@@ -61,7 +70,7 @@ export default function Login() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            username: formData.identifier.trim(),
+            username: cleanMobile,
             password: formData.password
           })
         });
@@ -152,25 +161,67 @@ export default function Login() {
             </div>
           )}
 
-          {/* Identifier field */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5 ml-1">
-              {t('mobile_or_email')}
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                <Mail size={18} />
+          {/* Registration Mode: Distinct Mobile and Optional Email fields */}
+          {isRegister ? (
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 ml-1">
+                  {i18n.language === 'ta' ? 'மொபைல் எண் (10 இலக்கங்கள்)' : 'Mobile Number (10 digits)'}
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Mail size={18} />
+                  </div>
+                  <input
+                    type="tel"
+                    value={formData.mobile}
+                    onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                    placeholder={i18n.language === 'ta' ? "எ.கா. 9876543210" : "e.g. 9876543210"}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3.5 pl-10 pr-4 text-slate-800 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none text-sm transition-all"
+                    required
+                  />
+                </div>
               </div>
-              <input
-                type="text"
-                value={formData.identifier}
-                onChange={(e) => setFormData({ ...formData, identifier: e.target.value })}
-                placeholder={t('mobile_or_email')}
-                className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3.5 pl-10 pr-4 text-slate-800 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none text-sm transition-all"
-                required
-              />
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 ml-1">
+                  {i18n.language === 'ta' ? 'மின்னஞ்சல் (விருப்பத்தேர்வு)' : 'Email Address (Optional)'}
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Mail size={18} />
+                  </div>
+                  <input
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder={i18n.language === 'ta' ? "farmer@example.com" : "farmer@example.com"}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3.5 pl-10 pr-4 text-slate-800 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none text-sm transition-all"
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            /* Login Mode: Single Identifier field */
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 ml-1">
+                {t('mobile_or_email')}
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <Mail size={18} />
+                </div>
+                <input
+                  type="text"
+                  value={formData.identifier}
+                  onChange={(e) => setFormData({ ...formData, identifier: e.target.value })}
+                  placeholder={t('mobile_or_email')}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3.5 pl-10 pr-4 text-slate-800 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 outline-none text-sm transition-all"
+                  required
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Password field */}
           <div>

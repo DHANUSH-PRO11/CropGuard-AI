@@ -1,6 +1,6 @@
 import { Outlet, NavLink, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Home, Leaf, Bot, CloudSun, Languages, User, Sparkles } from 'lucide-react';
+import { Home, Leaf, Bot, CloudSun, Languages, User } from 'lucide-react';
 
 export default function Layout() {
   const { t, i18n } = useTranslation();

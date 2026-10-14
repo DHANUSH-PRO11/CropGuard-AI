@@ -31,15 +31,30 @@ export default function Assistant() {
   const initialContext = location.state?.initialCropContext;
 
 
-  const [messages, setMessages] = useState([
-    { 
+  const [messages, setMessages] = useState(() => {
+    const defaultMsg = { 
       id: 1, 
       type: 'ai', 
       text: i18n.language === 'en' 
         ? "Hello! I'm AgroNex AI. You can speak to me using the mic, take a live photo of your crop leaf with the camera, or type your farming questions below." 
         : "வணக்கம்! நான் அக்ரோநெக்ஸ் AI. நீங்கள் மைக்ரோஃபோன் மூலம் பேசலாம், கேமரா மூலம் பயிர் இலையை படம் பிடிக்கலாம் அல்லது கீழே தட்டச்சு செய்யலாம்." 
+    };
+    if (initialContext) {
+      const condName = (initialContext.condition || '').replace(/_/g, ' ');
+      return [
+        defaultMsg,
+        {
+          id: 2,
+          type: 'ai',
+          text: i18n.language === 'ta'
+            ? `நான் உங்கள் ${initialContext.crop} பயிரின் முடிவுகளைப் பெற்றுள்ளேன் (${condName}). தெளிப்பு ஆலோசனை அல்லது சிகிச்சை பற்றி என்னிடம் கேளுங்கள்.`
+            : `I have received the diagnostic context for your ${initialContext.crop} (${condName}). Ask me about weather-grounded spray windows or treatment steps.`,
+          cropAnalysis: initialContext,
+        }
+      ];
     }
-  ]);
+    return [defaultMsg];
+  });
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -95,23 +110,6 @@ export default function Assistant() {
     };
   }, []);
 
-  // Hydrate conversation if navigated from diagnosis results
-  useEffect(() => {
-    if (initialContext) {
-      const condName = (initialContext.condition || '').replace(/_/g, ' ');
-      setMessages(prev => [
-        ...prev,
-        {
-          id: Date.now(),
-          type: 'ai',
-          text: i18n.language === 'ta'
-            ? `நான் உங்கள் ${initialContext.crop} பயிரின் முடிவுகளைப் பெற்றுள்ளேன் (${condName}). தெளிப்பு ஆலோசனை அல்லது சிகிச்சை பற்றி என்னிடம் கேளுங்கள்.`
-            : `I have received the diagnostic context for your ${initialContext.crop} (${condName}). Ask me about weather-grounded spray windows or treatment steps.`,
-          cropAnalysis: initialContext,
-        }
-      ]);
-    }
-  }, [initialContext, i18n.language]);
 
 
   // Helper: Encode raw Float32 audio samples into standard 16kHz mono 16-bit PCM WAV Blob
@@ -198,7 +196,7 @@ export default function Assistant() {
     if (scriptProcessorRef.current) {
       try {
         scriptProcessorRef.current.disconnect();
-      } catch (_) {}
+      } catch {}
       scriptProcessorRef.current = null;
     }
     if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
@@ -456,7 +454,7 @@ export default function Assistant() {
     const finalAudio = generateFinalAudio(recordingSeconds);
     cleanupAudioRecording();
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try { mediaRecorderRef.current.stop(); } catch (_) {}
+      try { mediaRecorderRef.current.stop(); } catch {}
     }
     if (finalAudio) {
       setRecordedAudio(finalAudio);
@@ -468,7 +466,7 @@ export default function Assistant() {
   const discardRecording = () => {
     cleanupAudioRecording();
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try { mediaRecorderRef.current.stop(); } catch (_) {}
+      try { mediaRecorderRef.current.stop(); } catch {}
     }
     if (previewAudioRef.current) {
       previewAudioRef.current.pause();
@@ -575,7 +573,7 @@ export default function Assistant() {
       const finalized = generateFinalAudio(recordingSeconds);
       cleanupAudioRecording();
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        try { mediaRecorderRef.current.stop(); } catch (_) {}
+        try { mediaRecorderRef.current.stop(); } catch {}
       }
       setIsRecording(false);
       setIsPaused(false);
@@ -1052,6 +1050,13 @@ export default function Assistant() {
               muted
               className="w-full h-full object-cover"
             />
+            {/* Camera Initializing Spinner */}
+            {!cameraActive && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-white text-xs">
+                <Loader2 size={24} className="animate-spin text-emerald-400 mb-2" />
+                <span>Starting camera...</span>
+              </div>
+            )}
             {/* Viewfinder Target Guide Overlay */}
             <div className="absolute inset-8 border-2 border-dashed border-white/50 rounded-2xl pointer-events-none flex items-center justify-center">
               <span className="text-[11px] text-white/80 bg-black/40 px-3 py-1 rounded-full">

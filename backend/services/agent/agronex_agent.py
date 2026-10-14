@@ -41,7 +41,8 @@ class AgroNexAgent:
         latitude: Optional[float] = None,
         longitude: Optional[float] = None,
         language: str = "en",
-        db_client: Optional[Client] = None
+        db_client: Optional[Client] = None,
+        context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Executes the 10-step AgentFoundry-compliant Agricultural Copilot Workflow.
@@ -101,7 +102,8 @@ class AgroNexAgent:
         node_start = time.perf_counter()
         query_lower = active_query.lower()
         should_run_vision = bool(image_bytes and len(image_bytes) > 0)
-        should_run_weather = (latitude is not None and longitude is not None) or any(
+        has_prior_context = bool(context and isinstance(context, dict) and ("crop" in context or "condition" in context))
+        should_run_weather = (latitude is not None and longitude is not None) or has_prior_context or any(
             k in query_lower for k in ["weather", "rain", "temperature", "humidity", "spray", "வானிலை", "மழை", "தெளிக்கலாமா"]
         )
         should_run_schemes = any(
@@ -164,6 +166,31 @@ class AgroNexAgent:
                         os.remove(temp_image_path)
                     except Exception:
                         pass
+        elif has_prior_context:
+            conf_raw = float(context.get("confidence", 0.0))
+            conf_norm = conf_raw / 100.0 if conf_raw > 1.0 else conf_raw
+            crop_prediction = {
+                "crop": context.get("crop", crop_hint or "Unknown"),
+                "condition": context.get("condition", "Healthy"),
+                "confidence": conf_norm,
+                "status": context.get("status", "High confidence" if conf_norm >= 0.6 else "Uncertain"),
+                "quality_status": context.get("quality_status", "Passed"),
+                "warning_message": context.get("warning_message"),
+                "is_healthy": context.get("is_healthy", "healthy" in str(context.get("condition", "")).lower()),
+                "severity": context.get("severity", "Not determined"),
+                "risk": context.get("risk", "Not determined")
+            }
+            log_node(
+                "disease_detection",
+                "context_reused",
+                {
+                    "crop": crop_prediction.get("crop"),
+                    "condition": crop_prediction.get("condition"),
+                    "confidence": crop_prediction.get("confidence"),
+                    "source": "grounded_consultation_context"
+                },
+                0.1
+            )
 
         # ---------------------------------------------------------
         # Node 4: Tool Execution — Weather & Agricultural Alerts
@@ -338,7 +365,7 @@ class AgroNexAgent:
         if db is not None:
             try:
                 tools_called.append("supabase_storage_and_db")
-                if crop_prediction:
+                if crop_prediction and should_run_vision:
                     db.table("crop_analyses").insert({
                         "crop_type": crop_prediction.get("crop", "Unknown"),
                         "detected_disease": crop_prediction.get("condition", "Unknown"),
@@ -356,11 +383,30 @@ class AgroNexAgent:
                 persistence_error = str(e)
                 logger.warning(f"Supabase persistence error: {e}")
 
+        # Local fallback persistence for offline resilience
+        try:
+            from config import local_db
+            if crop_prediction and should_run_vision:
+                local_db.save_crop_analysis({
+                    "crop_type": crop_prediction.get("crop", "Unknown"),
+                    "detected_disease": crop_prediction.get("condition", "Unknown"),
+                    "confidence": float(crop_prediction.get("confidence", 0.0)),
+                    "severity": crop_prediction.get("severity", "Not determined"),
+                    "risk_level": crop_prediction.get("risk", "Not determined")
+                })
+            local_db.save_chat_message("user", effective_query)
+            local_db.save_chat_message("ai", response_text)
+            if not persisted:
+                persisted = True
+        except Exception as e:
+            logger.warning(f"Local DB persistence fallback error: {e}")
+
         log_node(
             "persistence",
             "completed" if persisted else ("offline_fallback" if db is None else "error"),
             {
-                "persisted_to_supabase": persisted,
+                "persisted": persisted,
+                "supabase_used": db is not None,
                 "error": persistence_error
             },
             (time.perf_counter() - node_start) * 1000

@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Camera, Image as ImageIcon, CheckCircle, AlertTriangle, Sparkles, RefreshCw, Upload, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Camera, Image as ImageIcon, CheckCircle, AlertTriangle, Sparkles, RefreshCw, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../config/api';
 

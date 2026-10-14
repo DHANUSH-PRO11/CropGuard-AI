@@ -1,25 +1,38 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export function useLocation() {
-  const [location, setLocation] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [location, setLocation] = useState(() => {
+    try {
+      const saved = localStorage.getItem('agronex_location');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loading, setLoading] = useState(() => {
+    try {
+      return !localStorage.getItem('agronex_location');
+    } catch {
+      return true;
+    }
+  });
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const savedLocation = localStorage.getItem('agronex_location');
-    if (savedLocation) {
-      setLocation(JSON.parse(savedLocation));
-      setLoading(false);
-    } else {
-      requestLocation();
-    }
-  }, []);
-
-  const requestLocation = () => {
+  const requestLocation = useCallback(() => {
     setLoading(true);
     setError(null);
-    if (!navigator.geolocation) {
-      setError("Geolocation is not supported by your browser");
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      const defaultLoc = {
+        latitude: 11.0168,
+        longitude: 76.9558,
+        city: "Coimbatore",
+        state: "Tamil Nadu",
+        country: "India"
+      };
+      setLocation(defaultLoc);
+      try {
+        localStorage.setItem('agronex_location', JSON.stringify(defaultLoc));
+      } catch {}
       setLoading(false);
       return;
     }
@@ -38,7 +51,9 @@ export function useLocation() {
             country: data.countryName || ""
           };
           setLocation(newLoc);
-          localStorage.setItem('agronex_location', JSON.stringify(newLoc));
+          try {
+            localStorage.setItem('agronex_location', JSON.stringify(newLoc));
+          } catch {}
           setLoading(false);
         } catch (err) {
           console.warn("Reverse geocode failed, using coordinates:", err);
@@ -50,12 +65,13 @@ export function useLocation() {
             country: "India"
           };
           setLocation(fallbackLoc);
-          localStorage.setItem('agronex_location', JSON.stringify(fallbackLoc));
+          try {
+            localStorage.setItem('agronex_location', JSON.stringify(fallbackLoc));
+          } catch {}
           setLoading(false);
         }
       },
       (err) => {
-        // Fallback to regional agricultural center (Coimbatore, Tamil Nadu)
         console.warn("Location access denied or timed out, using regional default:", err);
         const defaultLoc = {
           latitude: 11.0168,
@@ -65,19 +81,32 @@ export function useLocation() {
           country: "India"
         };
         setLocation(defaultLoc);
-        localStorage.setItem('agronex_location', JSON.stringify(defaultLoc));
+        try {
+          localStorage.setItem('agronex_location', JSON.stringify(defaultLoc));
+        } catch {}
         setError(null);
         setLoading(false);
       },
       { timeout: 8000 }
     );
-  };
+  }, []);
+
+  useEffect(() => {
+    if (location) return;
+    const timer = setTimeout(() => {
+      requestLocation();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [location, requestLocation]);
 
   const updateLocationManually = (lat, lon, city, state, country) => {
     const newLoc = { latitude: lat, longitude: lon, city, state, country };
     setLocation(newLoc);
-    localStorage.setItem('agronex_location', JSON.stringify(newLoc));
+    try {
+      localStorage.setItem('agronex_location', JSON.stringify(newLoc));
+    } catch {}
   };
 
   return { location, loading, error, requestLocation, updateLocationManually };
 }
+

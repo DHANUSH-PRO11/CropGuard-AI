@@ -1,18 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { MapPin, CloudSun, AlertTriangle, CloudRain, Wind, ThermometerSun, Map, Navigation } from 'lucide-react';
+import { MapPin, CloudSun, CloudRain, Wind, Navigation, RefreshCw } from 'lucide-react';
 import { useLocation } from '../hooks/useLocation';
 import { API_BASE_URL } from '../config/api';
 
 export default function LocationWeatherCard() {
-  const { t, i18n } = useTranslation();
+  const { i18n } = useTranslation();
   const { location, loading: locLoading, error: locError, requestLocation } = useLocation();
   const [weather, setWeather] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const isTamil = i18n.language === 'ta';
 
-  const fetchWeather = async (lat, lon) => {
+  const fetchWeather = useCallback(async (lat, lon) => {
     setWeatherLoading(true);
     try {
       const apiUrl = API_BASE_URL;
@@ -25,13 +25,15 @@ export default function LocationWeatherCard() {
     } finally {
       setWeatherLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (location && location.latitude && location.longitude) {
+    if (!location?.latitude || !location?.longitude) return;
+    const timer = setTimeout(() => {
       fetchWeather(location.latitude, location.longitude);
-    }
-  }, [location]);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [location?.latitude, location?.longitude, fetchWeather]);
 
   if (locLoading) {
     return (
@@ -129,12 +131,19 @@ export default function LocationWeatherCard() {
         </div>
       ) : (
         <div className="text-center py-4">
-          <p className="text-red-500 font-bold mb-1">
+          <p className="text-red-600 font-bold mb-1 text-sm">
             {isTamil ? "நேரடி வானிலைத் தரவைப் பெற முடியவில்லை." : "Unable to fetch live weather data."}
           </p>
-          <p className="text-red-400 text-sm">
-            {isTamil ? "தரவு இல்லை" : "Data unavailable"}
+          <p className="text-gray-500 text-xs mb-3">
+            {isTamil ? "சேவையகத்துடன் இணைக்க முடியவில்லை" : "Weather service temporarily unavailable."}
           </p>
+          <button
+            onClick={() => location && fetchWeather(location.latitude, location.longitude)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+          >
+            <RefreshCw size={13} />
+            <span>{isTamil ? "மீண்டும் முயற்சி" : "Retry"}</span>
+          </button>
         </div>
       )}
 

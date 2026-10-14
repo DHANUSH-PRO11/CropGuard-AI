@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, MapPin, Search, CloudRain, Wind, ThermometerSun, AlertTriangle, CloudSun, Droplets, Sunrise, Sunset } from 'lucide-react';
+import { ChevronLeft, MapPin, Search, CloudRain, Wind, ThermometerSun, AlertTriangle, CloudSun, Droplets } from 'lucide-react';
 import { useLocation } from '../hooks/useLocation';
 import { API_BASE_URL } from '../config/api';
 
 export default function Weather() {
-  const { t, i18n } = useTranslation();
+  const { i18n } = useTranslation();
   const { location, loading: locLoading, error: locError, requestLocation, updateLocationManually } = useLocation();
   const [weather, setWeather] = useState(null);
   const [weatherLoading, setWeatherLoading] = useState(false);
@@ -14,7 +14,7 @@ export default function Weather() {
   const [searchQuery, setSearchQuery] = useState("");
   const isTamil = i18n.language === 'ta';
 
-  const fetchWeather = async (lat, lon) => {
+  const fetchWeather = useCallback(async (lat, lon) => {
     setWeatherLoading(true);
     try {
       const apiUrl = API_BASE_URL;
@@ -27,13 +27,15 @@ export default function Weather() {
     } finally {
       setWeatherLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (location?.latitude && location?.longitude) {
+    if (!location?.latitude || !location?.longitude) return;
+    const timer = setTimeout(() => {
       fetchWeather(location.latitude, location.longitude);
-    }
-  }, [location]);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [location?.latitude, location?.longitude, fetchWeather]);
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -139,6 +141,18 @@ export default function Weather() {
             </form>
           )}
         </div>
+
+        {locError && (
+          <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200 flex items-center justify-between mb-5 text-xs text-amber-800">
+            <span>{locError}</span>
+            <button
+              onClick={requestLocation}
+              className="bg-amber-100 hover:bg-amber-200 text-amber-900 px-3 py-1.5 rounded-xl font-bold transition-colors cursor-pointer"
+            >
+              {isTamil ? "மீண்டும் முயற்சி" : "Retry GPS"}
+            </button>
+          </div>
+        )}
 
         {weatherLoading ? (
           <div className="text-center py-12 bg-white rounded-3xl border border-gray-100 shadow-xs">

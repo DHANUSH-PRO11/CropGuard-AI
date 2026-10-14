@@ -1,65 +1,64 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CloudSun, CloudRain, Wind, AlertTriangle, ThermometerSun, CheckCircle, MapPin, RefreshCw } from 'lucide-react';
+import { CloudSun, CloudRain, Wind, AlertTriangle, ThermometerSun, CheckCircle, RefreshCw } from 'lucide-react';
+import { useLocation } from '../hooks/useLocation';
 import { API_BASE_URL } from '../config/api';
 
 export default function WeatherAlerts({ crop, condition }) {
-  const { t, i18n } = useTranslation();
+  const { i18n } = useTranslation();
+  const { location } = useLocation();
   const [weatherData, setWeatherData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [locationName, setLocationName] = useState("Your Farm");
-  const [isTamil, setIsTamil] = useState(false);
+  const isTamil = i18n.language === 'ta';
 
-  useEffect(() => {
-    setIsTamil(i18n.language === 'ta');
-  }, [i18n.language]);
-
-  const fetchWeather = () => {
+  const fetchWeatherForCoords = useCallback(async (lat, lon) => {
     setLoading(true);
     setError(null);
-    
-    if (!navigator.geolocation) {
-      setError("Geolocation is not supported by your browser.");
-      setLoading(false);
-      return;
-    }
+    try {
+      const apiUrl = API_BASE_URL;
+      let url = `${apiUrl}/api/weather/forecast?lat=${lat}&lon=${lon}`;
+      if (crop) url += `&crop=${encodeURIComponent(crop)}`;
+      if (condition) url += `&condition=${encodeURIComponent(condition)}`;
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const lat = position.coords.latitude;
-          const lon = position.coords.longitude;
-          
-          const apiUrl = API_BASE_URL;
-          let url = `${apiUrl}/api/weather/forecast?lat=${lat}&lon=${lon}`;
-          if (crop) url += `&crop=${encodeURIComponent(crop)}`;
-          if (condition) url += `&condition=${encodeURIComponent(condition)}`;
-          
-          const response = await fetch(url);
-          if (!response.ok) throw new Error("API failed");
-          
-          const data = await response.json();
-          setWeatherData(data);
-        } catch (err) {
-          setError("Weather information is temporarily unavailable.");
-        } finally {
-          setLoading(false);
-        }
-      },
-      (err) => {
-        setError("Location access is required for local weather.");
-        setLoading(false);
-      },
-      { timeout: 10000 }
-    );
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Weather API failed");
+      const data = await response.json();
+      setWeatherData(data);
+    } catch (err) {
+      console.warn("WeatherAlerts fetch failed:", err);
+      setError(isTamil ? "வானிலைத் தகவலைப் பெற முடியவில்லை." : "Weather information is temporarily unavailable.");
+    } finally {
+      setLoading(false);
+    }
+  }, [crop, condition, isTamil]);
+
+  const handleRefresh = () => {
+    const lat = location?.latitude || 11.0168;
+    const lon = location?.longitude || 76.9558;
+    fetchWeatherForCoords(lat, lon);
   };
 
   useEffect(() => {
-    fetchWeather();
-    const interval = setInterval(fetchWeather, 3600000); // refresh every hour
-    return () => clearInterval(interval);
-  }, [crop, condition]);
+    let isSubscribed = true;
+    const lat = location?.latitude || 11.0168;
+    const lon = location?.longitude || 76.9558;
+    
+    const timer = setTimeout(() => {
+      if (isSubscribed) fetchWeatherForCoords(lat, lon);
+    }, 0);
+
+    const interval = setInterval(() => {
+      if (isSubscribed) {
+        fetchWeatherForCoords(lat, lon);
+      }
+    }, 3600000);
+    return () => {
+      isSubscribed = false;
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
+  }, [location?.latitude, location?.longitude, fetchWeatherForCoords]);
 
   const getAlertIcon = (type) => {
     switch (type) {
@@ -90,19 +89,19 @@ export default function WeatherAlerts({ crop, condition }) {
 
   const formatTime = (isoString) => {
     if (!isoString) return "";
-    const d = new Date(isoString);
-    const today = new Date();
-    const tomorrow = new Date();
-    tomorrow.setDate(today.getDate() + 1);
-    
-    let dayStr = "";
-    if (d.getDate() === today.getDate()) dayStr = isTamil ? "இன்று" : "Today";
-    else if (d.getDate() === tomorrow.getDate()) dayStr = isTamil ? "நாளை" : "Tomorrow";
-    else dayStr = d.toLocaleDateString();
-
-    const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return `${dayStr} • ${timeStr}`;
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleDateString(isTamil ? 'ta-IN' : 'en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return isoString;
+    }
   };
+
 
   return (
     <div className="mb-6">
@@ -110,7 +109,7 @@ export default function WeatherAlerts({ crop, condition }) {
         <h3 className="text-lg font-bold text-agronex-deep flex items-center gap-2 uppercase tracking-wide text-sm">
           <CloudSun size={18} /> {isTamil ? "வானிலை எச்சரிக்கைகள்" : "WEATHER ALERTS"}
         </h3>
-        <button onClick={fetchWeather} disabled={loading} className="text-gray-400 hover:text-agronex-primary transition-colors">
+        <button onClick={handleRefresh} disabled={loading} className="text-gray-400 hover:text-agronex-primary transition-colors cursor-pointer" title="Refresh weather alerts">
           <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
         </button>
       </div>
@@ -124,8 +123,8 @@ export default function WeatherAlerts({ crop, condition }) {
         <div className="bg-red-50 p-5 rounded-2xl border border-red-100 text-center">
           <p className="text-red-600 font-medium text-sm mb-3">{error}</p>
           <button 
-            onClick={fetchWeather}
-            className="bg-red-100 text-red-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-200 transition-colors"
+            onClick={handleRefresh}
+            className="bg-red-100 text-red-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-200 transition-colors cursor-pointer"
           >
             {isTamil ? "மீண்டும் முயற்சி செய்" : "Enable Location / Retry"}
           </button>

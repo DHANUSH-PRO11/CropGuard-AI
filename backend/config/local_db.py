@@ -264,3 +264,33 @@ def get_recent_crop_analyses(limit: int = 20) -> List[Dict[str, Any]]:
         return [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()
+
+# --- Chat History Helpers ---
+def save_chat_message(role: str, message: str, user_id: Optional[str] = None) -> str:
+    """Saves a user or AI chat message into local SQLite chat_history."""
+    conn = get_connection()
+    rec_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        with conn:
+            conn.execute("""
+            INSERT INTO chat_history (id, user_id, role, message, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """, (rec_id, user_id, role, message, now))
+        return rec_id
+    finally:
+        conn.close()
+
+def get_recent_chat_history(user_id: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
+    """Retrieves recent chat history records from local SQLite."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        if user_id:
+            cur.execute("SELECT * FROM chat_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?", (user_id, limit))
+        else:
+            cur.execute("SELECT * FROM chat_history ORDER BY created_at DESC LIMIT ?", (limit,))
+        return [dict(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+

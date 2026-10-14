@@ -1,16 +1,17 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Camera, Upload, Leaf, Bot, CloudSun, Sparkles, ArrowRight, ShieldCheck, Activity } from 'lucide-react';
+import { Camera, Upload, Bot, CloudSun, Sparkles, ArrowRight, ShieldCheck, Activity } from 'lucide-react';
 import LocationWeatherCard from '../components/LocationWeatherCard';
 
 export default function Dashboard() {
   const { t, i18n } = useTranslation();
+  const [currentHour] = useState(() => new Date().getHours());
   const isTamil = i18n.language === 'ta';
 
   const getTimeGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return isTamil ? "இனிய காலை வணக்கம்" : "Good Morning";
-    if (hour < 17) return isTamil ? "இனிய மதிய வணக்கம்" : "Good Afternoon";
+    if (currentHour < 12) return isTamil ? "இனிய காலை வணக்கம்" : "Good Morning";
+    if (currentHour < 17) return isTamil ? "இனிய மதிய வணக்கம்" : "Good Afternoon";
     return isTamil ? "இனிய மாலை வணக்கம்" : "Good Evening";
   };
 

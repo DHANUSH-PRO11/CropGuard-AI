@@ -159,5 +159,56 @@ class TestAgroNexAPIEndpoints(unittest.TestCase):
         self.assertTrue(chat_res["success"])
         self.assertIn("recommendation", chat_res)
 
+    def test_10_agent_chat_with_diagnostic_context(self):
+        res = self.client.post("/api/agent/chat", json={
+            "message": "Should I spray today?",
+            "crop_hint": "Tomato",
+            "language": "en",
+            "context": {
+                "crop": "Tomato",
+                "condition": "Early blight",
+                "confidence": 84.5,
+                "status": "High confidence",
+                "quality_status": "Passed"
+            }
+        })
+        self.assertEqual(res.status_code, 200)
+        body = res.json()
+        self.assertTrue(body["success"])
+        self.assertIn("spray_advisory", body)
+        self.assertIsNotNone(body["crop_prediction"])
+        self.assertEqual(body["crop_prediction"]["crop"], "Tomato")
+        self.assertEqual(body["crop_prediction"]["condition"], "Early blight")
+
+    def test_11_local_db_chat_persistence(self):
+        from config import local_db
+        msg_id = local_db.save_chat_message("user", "Is drip irrigation feasible for cotton?")
+        self.assertTrue(bool(msg_id))
+        history = local_db.get_recent_chat_history(limit=5)
+        self.assertTrue(any("cotton" in m["message"].lower() for m in history))
+
+    def test_12_auth_login_with_email(self):
+        import uuid
+        unique_mobile = f"97{uuid.uuid4().int % 100000000:08d}"
+        email = f"farmer_{unique_mobile}@example.com"
+        password = "secretPassword123"
+
+        reg_res = self.client.post("/api/auth/register", json={
+            "name": "Ravi Email Test",
+            "mobile": unique_mobile,
+            "email": email,
+            "password": password
+        })
+        self.assertEqual(reg_res.status_code, 200)
+
+        # Login with email
+        login_res = self.client.post("/api/auth/login", json={
+            "username": email,
+            "password": password
+        })
+        self.assertEqual(login_res.status_code, 200)
+        self.assertIn("access_token", login_res.json())
+
 if __name__ == "__main__":
     unittest.main()
+
