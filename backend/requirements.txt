@@ -13,5 +13,5 @@ supabase
 scikit-learn
 google-auth
 requests
-httpx>=0.24.0
+httpx>=0.24.0,<0.28.0
 sarvamai==0.1.35
