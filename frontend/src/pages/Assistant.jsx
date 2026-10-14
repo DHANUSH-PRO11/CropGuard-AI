@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 import { 
   Send, 
   Mic, 
@@ -24,7 +25,10 @@ import {
 
 export default function Assistant() {
   const { t, i18n } = useTranslation();
+  const location = useLocation();
   const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const initialContext = location.state?.initialCropContext;
+
 
   const [messages, setMessages] = useState([
     { 
@@ -89,6 +93,25 @@ export default function Assistant() {
       if (previewAudioRef.current) previewAudioRef.current.pause();
     };
   }, []);
+
+  // Hydrate conversation if navigated from diagnosis results
+  useEffect(() => {
+    if (initialContext) {
+      const condName = (initialContext.condition || '').replace(/_/g, ' ');
+      setMessages(prev => [
+        ...prev,
+        {
+          id: Date.now(),
+          type: 'ai',
+          text: i18n.language === 'ta'
+            ? `நான் உங்கள் ${initialContext.crop} பயிரின் முடிவுகளைப் பெற்றுள்ளேன் (${condName}). தெளிப்பு ஆலோசனை அல்லது சிகிச்சை பற்றி என்னிடம் கேளுங்கள்.`
+            : `I have received the diagnostic context for your ${initialContext.crop} (${condName}). Ask me about weather-grounded spray windows or treatment steps.`,
+          cropAnalysis: initialContext,
+        }
+      ]);
+    }
+  }, [initialContext]);
+
 
   // Helper: Encode raw Float32 audio samples into standard 16kHz mono 16-bit PCM WAV Blob
   const encodeWavBlob = (buffers, inputSampleRate = 48000) => {
@@ -589,20 +612,48 @@ export default function Assistant() {
     setIsLoading(true);
 
     try {
-      const formData = new FormData();
-      formData.append('file', audioObj.file, audioObj.name || 'voice.webm');
-      formData.append('language', i18n.language || 'ta');
+      let data = null;
 
-      const res = await fetch(`${apiUrl}/api/assistant/voice`, {
-        method: 'POST',
-        body: formData,
-      });
+      // If photo is also attached, invoke the unified multimodal AgroNex Copilot workflow
+      if (photoToSend) {
+        const agentForm = new FormData();
+        agentForm.append('audio', audioObj.file, audioObj.name || 'voice.webm');
+        agentForm.append('image', photoToSend.file, photoToSend.name || 'leaf.jpg');
+        agentForm.append('language', i18n.language || 'ta');
 
-      if (!res.ok) {
-        throw new Error(`Voice server error (${res.status}): ${res.statusText}`);
+        const res = await fetch(`${apiUrl}/api/agent/run`, {
+          method: 'POST',
+          body: agentForm,
+        });
+
+        if (!res.ok) throw new Error(`Agent server error (${res.status}): ${res.statusText}`);
+        const agentRes = await res.json();
+        data = {
+          reply: agentRes.recommendation,
+          transcription: agentRes.transcription,
+          detected_language: agentRes.language,
+          audio_base64: agentRes.audio_base64,
+          cropAnalysis: agentRes.crop_prediction,
+          sprayAdvisory: agentRes.spray_advisory
+        };
+      } else {
+        const formData = new FormData();
+        formData.append('file', audioObj.file, audioObj.name || 'voice.webm');
+        formData.append('language', i18n.language || 'ta');
+        if (initialContext) {
+          formData.append('context', JSON.stringify(initialContext));
+        }
+
+        const res = await fetch(`${apiUrl}/api/assistant/voice`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!res.ok) {
+          throw new Error(`Voice server error (${res.status}): ${res.statusText}`);
+        }
+        data = await res.json();
       }
-
-      const data = await res.json();
 
       if (data.transcription) {
         setMessages(prev => prev.map(msg => 
@@ -612,24 +663,6 @@ export default function Assistant() {
         ));
       }
 
-      // If photo was also attached, run crop disease analysis
-      let cropResult = null;
-      if (photoToSend) {
-        try {
-          const cropForm = new FormData();
-          cropForm.append('file', photoToSend.file);
-          const cropRes = await fetch(`${apiUrl}/api/crops/analyze`, {
-            method: 'POST',
-            body: cropForm,
-          });
-          if (cropRes.ok) {
-            cropResult = await cropRes.json();
-          }
-        } catch (cropErr) {
-          console.warn("Crop analysis failed:", cropErr);
-        }
-      }
-
       const aiMessageId = Date.now() + 1;
       const newAiMessage = {
         id: aiMessageId,
@@ -637,7 +670,8 @@ export default function Assistant() {
         text: data.reply,
         detectedLanguage: data.detected_language,
         audioBase64: data.audio_base64,
-        cropAnalysis: cropResult,
+        cropAnalysis: data.cropAnalysis || null,
+        sprayAdvisory: data.sprayAdvisory || null,
       };
 
       setMessages(prev => [...prev, newAiMessage]);
@@ -688,53 +722,60 @@ export default function Assistant() {
     setIsLoading(true);
 
     try {
-      let cropResult = null;
-      let diagnosisSummary = "";
+      let data = null;
 
-      // 1. If photo is attached, analyze crop leaf disease
+      // 1. If photo is attached, execute the full multimodal AgroNex Copilot Agent
       if (photoToSend) {
-        const cropForm = new FormData();
-        cropForm.append('file', photoToSend.file);
+        const agentForm = new FormData();
+        agentForm.append('image', photoToSend.file, photoToSend.name || 'leaf.jpg');
+        if (trimmedInput) agentForm.append('query', trimmedInput);
+        agentForm.append('language', i18n.language || 'en');
 
-        const cropRes = await fetch(`${apiUrl}/api/crops/analyze`, {
+        const agentRes = await fetch(`${apiUrl}/api/agent/run`, {
           method: 'POST',
-          body: cropForm,
+          body: agentForm,
         });
 
-        if (cropRes.ok) {
-          cropResult = await cropRes.json();
-          const condName = (cropResult.condition || '').replace(/_/g, ' ');
-          const conf = (cropResult.confidence * 100).toFixed(0);
-          diagnosisSummary = ` Crop Analysis: ${condName} (${conf}% confidence). Status: ${cropResult.status}. Severity: ${cropResult.severity}.`;
+        if (!agentRes.ok) throw new Error(`Agent error (${agentRes.status}): ${agentRes.statusText}`);
+        const result = await agentRes.json();
+        data = {
+          reply: result.recommendation,
+          audio_base64: result.audio_base64,
+          cropAnalysis: result.crop_prediction,
+          sprayAdvisory: result.spray_advisory
+        };
+      } else {
+        // Standard chat with context grounding
+        const res = await fetch(`${apiUrl}/api/agent/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: trimmedInput,
+            language: i18n.language || 'en',
+            context: initialContext || null,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error(`Chat error (${res.status}): ${res.statusText}`);
         }
+
+        const result = await res.json();
+        data = {
+          reply: result.recommendation || result.reply,
+          audio_base64: result.audio_base64,
+          sprayAdvisory: result.spray_advisory || null
+        };
       }
 
-      // 2. Chat query with assistant
-      const promptToSend = trimmedInput 
-        ? `${trimmedInput}${diagnosisSummary ? ` [Image Observation: ${diagnosisSummary}]` : ''}`
-        : `Farmer uploaded a crop leaf photo.${diagnosisSummary ? ` Analysis detected: ${diagnosisSummary}.` : ''} Please provide concise diagnosis and treatment guidance.`;
-
-      const res = await fetch(`${apiUrl}/api/assistant/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: promptToSend,
-          language: i18n.language || 'en',
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`Chat error (${res.status}): ${res.statusText}`);
-      }
-
-      const data = await res.json();
       const aiMessageId = Date.now() + 1;
       const newAiMessage = {
         id: aiMessageId,
         type: 'ai',
         text: data.reply,
         audioBase64: data.audio_base64,
-        cropAnalysis: cropResult,
+        cropAnalysis: data.cropAnalysis || null,
+        sprayAdvisory: data.sprayAdvisory || null,
       };
 
       setMessages(prev => [...prev, newAiMessage]);
@@ -743,6 +784,7 @@ export default function Assistant() {
         const audioUrl = `data:audio/wav;base64,${data.audio_base64}`;
         playAudio(aiMessageId, audioUrl);
       }
+
     } catch (err) {
       console.error("API error:", err);
       setErrorMsg("Failed to reach AgroNex assistant.");

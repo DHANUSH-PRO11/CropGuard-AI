@@ -59,10 +59,12 @@ class CropAnalysisResponse(BaseModel):
 class ChatMessage(BaseModel):
     message: str
     language: Optional[str] = "en"
+    context: Optional[dict] = None
 
 class ChatResponse(BaseModel):
     reply: str
     audio_base64: Optional[str] = None
+
 
 class VoiceChatResponse(BaseModel):
     detected_language: str

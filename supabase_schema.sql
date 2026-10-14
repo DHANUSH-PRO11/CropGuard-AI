@@ -93,3 +93,10 @@ ON CONFLICT DO NOTHING;
 
 CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING (bucket_id = 'crop-images');
 CREATE POLICY "Allow uploads" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'crop-images');
+
+-- Performance Indexes for fast dashboard and history lookups
+CREATE INDEX IF NOT EXISTS idx_crop_analyses_created_at ON public.crop_analyses(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_crop_analyses_user_id ON public.crop_analyses(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_history_created_at ON public.chat_history(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_weather_alerts_created_at ON public.weather_alerts(created_at DESC);
+

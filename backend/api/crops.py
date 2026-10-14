@@ -1,13 +1,15 @@
+from typing import Optional, List
 import os
-from fastapi import APIRouter, Depends, UploadFile, File, Form
+import logging
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from supabase import Client
 from config.database import get_supabase
 from schemas import schemas
 from services.ai.disease_detector import DiseaseDetector
 from datetime import datetime
-
 from PIL import Image
-from fastapi import HTTPException
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 detector = DiseaseDetector()
@@ -17,14 +19,14 @@ async def analyze_crop(
     file: UploadFile = File(...),
     mode: str = Form("direct"),
     enable_tta: bool = Form(False),
-    db: Client = Depends(get_supabase)
+    db: Optional[Client] = Depends(get_supabase)
 ):
     if not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="Uploaded file is not an image.")
         
     # Save the file temporarily
     os.makedirs("uploads", exist_ok=True)
-    filename = os.path.basename(file.filename)
+    filename = os.path.basename(file.filename or "leaf.jpg")
     file_path = f"uploads/{filename}"
     file_bytes = await file.read()
     
@@ -39,13 +41,7 @@ async def analyze_crop(
         
     file_size_kb = len(file_bytes) / 1024
     
-    print("\n=== UPLOADED IMAGE DEBUG INFO ===")
-    print(f"Uploaded image:\n{file.filename}")
-    print(f"\nContent type:\n{file.content_type}")
-    print(f"\nSize:\n{file_size_kb:.1f} KB")
-    print(f"\nDimensions:\n{img_width} x {img_height}")
-    print(f"\nMode:\n{mode}, TTA: {enable_tta}")
-    print("=================================\n")
+    logger.info(f"Analyzing crop image: {filename} ({img_width}x{img_height}, {file_size_kb:.1f} KB, mode: {mode}, tta: {enable_tta})")
     
     # Use AI service
     try:
@@ -53,39 +49,71 @@ async def analyze_crop(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Crop analysis failed: {str(e)}")
         
-    try:
-        # Upload to Supabase Storage
-        file_name_in_storage = f"{int(datetime.utcnow().timestamp())}_{file.filename}"
-        with open(file_path, "rb") as f:
-            # We must use proper kwargs for supabase python client
-            res = db.storage.from_("crop-images").upload(file_name_in_storage, f.read(), {"content-type": file.content_type})
+    public_url = None
+    if db is not None:
+        try:
+            # Upload to Supabase Storage
+            file_name_in_storage = f"{int(datetime.utcnow().timestamp())}_{filename}"
+            with open(file_path, "rb") as f:
+                res = db.storage.from_("crop-images").upload(file_name_in_storage, f.read(), {"content-type": file.content_type})
+                
+            public_url = db.storage.from_("crop-images").get_public_url(file_name_in_storage)
             
-        public_url = db.storage.from_("crop-images").get_public_url(file_name_in_storage)
-        
-        # Save to database
-        # Assuming a default dummy user_id for now as we don't have full auth setup yet.
-        # But we will leave it null if not provided since RLS might not strictly require it in our custom setup
-        db_record = {
-            "crop_type": prediction["crop"],
-            "image_path": public_url,
-            "detected_disease": prediction["condition"],
-            "confidence": float(prediction["confidence"]),
-            "severity": prediction["severity"],
-            "risk_level": prediction["risk"]
-        }
-        
-        db.table("crop_analyses").insert(db_record).execute()
-        
-    except Exception as e:
-        print(f"Warning: Failed to save to Supabase: {str(e)}")
-        # We still return the prediction even if saving fails
+            # Save to database
+            db_record = {
+                "crop_type": prediction.get("crop", "Unknown"),
+                "image_path": public_url,
+                "detected_disease": prediction.get("condition", "Unknown"),
+                "confidence": float(prediction.get("confidence", 0.0)),
+                "severity": prediction.get("severity", "Not determined"),
+                "risk_level": prediction.get("risk", "Not determined")
+            }
+            
+            db.table("crop_analyses").insert(db_record).execute()
+            logger.info("Crop analysis record saved to Supabase.")
+        except Exception as e:
+            logger.warning(f"Failed to save crop analysis to Supabase: {str(e)}")
+    else:
+        logger.info("Supabase not configured; analysis completed in local memory mode.")
     
     # Optionally remove local file
     try:
-        os.remove(file_path)
-    except:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+    except Exception:
         pass
     
     return prediction
+
+@router.get("/history", response_model=List[schemas.CropAnalysisResponse])
+def get_crop_history(db: Optional[Client] = Depends(get_supabase)):
+    """Retrieve history of saved crop analyses from Supabase."""
+    if db is None:
+        return []
+    try:
+        res = db.table("crop_analyses").select("*").order("created_at", desc=True).limit(20).execute()
+        records = []
+        for row in res.data or []:
+            records.append({
+                "crop": row.get("crop_type", "Unknown"),
+                "condition": row.get("detected_disease", "Unknown"),
+                "confidence": float(row.get("confidence", 0.0)),
+                "is_healthy": "healthy" in row.get("detected_disease", "").lower(),
+                "status": "High confidence" if float(row.get("confidence", 0.0)) >= 0.7 else "Uncertain",
+                "top_predictions": [],
+                "severity": row.get("severity", "Not determined"),
+                "risk": row.get("risk_level", "Not determined"),
+                "quality_status": "Passed",
+                "warning_message": None,
+                "uncertainty_reason": None,
+                "latency_ms": None,
+                "preprocessing_mode": "direct",
+                "tta_enabled": False
+            })
+        return records
+    except Exception as e:
+        logger.warning(f"Failed to fetch history from Supabase: {e}")
+        return []
+
 
 

@@ -1,0 +1,210 @@
+# ==============================================================================
+# AgentFoundry Workflow Manifest: AgroNex Agricultural Copilot
+# Event: Code for a Billion – Bharat Agentic-AI Hackathon 2026
+# Platform: AgentFoundry (agentfoundry.me)
+# ==============================================================================
+
+name: agronex-farming-copilot
+version: 1.0.0
+description: >
+  Autonomous multi-modal agricultural copilot for smallholder and commercial farmers.
+  Coordinates computer-vision crop disease detection, live Open-Meteo weather risk feeds,
+  Sarvam AI reasoning, and voice generation with human-in-the-loop safety boundaries.
+
+metadata:
+  domain: Agriculture & Food Security
+  target_beneficiaries: Smallholder Indian Farmers (Tamil Nadu & Pan-India)
+  supported_languages:
+    - en (English)
+    - ta (Tamil)
+    - ta-IN (Tamil-English Code-mix)
+  governance:
+    authority_lease:
+      allowed_tools:
+        - efficientnet_v2_disease_detector
+        - open_meteo_weather_service
+        - sarvam_agricultural_reasoner
+        - sarvam_bulbul_tts
+        - supabase_persistence
+      forbidden_actions:
+        - fabricated_pesticide_dosages
+        - ungrounded_weather_facts
+        - definitive_diagnosis_without_agronomist_if_confidence_low
+    decision_dock:
+      human_in_the_loop_threshold: 0.60
+      action_on_uncertainty: flag_for_kvk_extension_officer_review
+
+workflow:
+  triggers:
+    - type: api_endpoint
+      path: /api/agent/run
+      method: POST
+      content_types:
+        - multipart/form-data
+        - application/json
+
+  inputs:
+    query:
+      type: string
+      required: false
+      description: Farmer question or transcribed voice text.
+    image:
+      type: file
+      required: false
+      description: Plant leaf image file (JPG, PNG, WEBP).
+    audio:
+      type: file
+      required: false
+      description: Farmer voice audio input (WAV, WEBM, OGG, MP4).
+    latitude:
+      type: float
+      required: false
+      description: Farm field latitude for local micro-climate forecast.
+    longitude:
+      type: float
+      required: false
+      description: Farm field longitude for local micro-climate forecast.
+    crop_hint:
+      type: string
+      required: false
+      description: Optional farmer-specified crop type.
+    language:
+      type: enum
+      values: [en, ta]
+      default: en
+      description: Response language preference.
+
+  stages:
+    # --------------------------------------------------------------------------
+    # Stage 1: Input Ingestion & Transcription
+    # --------------------------------------------------------------------------
+    - id: input_ingestion
+      name: Multimodal Input Ingestion
+      type: gate
+      steps:
+        - tool: sarvam_speech_to_text
+          condition: inputs.audio != null
+          model: saaras:v4
+          mode: codemix
+          output_mapping:
+            transcription: state.query
+            detected_language: state.language
+
+    # --------------------------------------------------------------------------
+    # Stage 2: Intent Classification & Routing
+    # --------------------------------------------------------------------------
+    - id: intent_routing
+      name: Adaptive Agricultural Tool Routing
+      type: router
+      routes:
+        - target: disease_detection
+          condition: inputs.image != null
+        - target: weather_lookup
+          condition: inputs.latitude != null || query_contains(["weather", "rain", "spray", "வானிலை", "மழை"])
+        - target: context_assembly
+          default: true
+
+    # --------------------------------------------------------------------------
+    # Stage 3: Computer Vision Inference
+    # --------------------------------------------------------------------------
+    - id: disease_detection
+      name: EfficientNetV2 Disease Prediction
+      type: tool_execution
+      tool: efficientnet_v2_disease_detector
+      config:
+        model_path: models/efficientnet_v2_s_best.onnx
+        preprocessing_mode: direct
+        enable_tta: true
+        quality_gate:
+          min_width: 100
+          min_height: 100
+          blur_laplacian_threshold: 60.0
+          darkness_mean_threshold: 40.0
+          foliage_min_ratio: 0.05
+      output_mapping:
+        crop: state.crop
+        condition: state.condition
+        confidence: state.confidence
+        quality_status: state.quality_status
+
+    # --------------------------------------------------------------------------
+    # Stage 4: Meteorological Feed & Risk Rules
+    # --------------------------------------------------------------------------
+    - id: weather_lookup
+      name: Real-time Weather & Spray Window Feasibility
+      type: tool_execution
+      tool: open_meteo_weather_service
+      config:
+        forecast_days: 7
+        hourly_window: 24
+        thresholds:
+          rain_warning_pct: 70
+          heavy_rain_mm: 10.0
+          wind_warning_kmh: 25.0
+      output_mapping:
+        weather_context: state.weather_data
+        spray_advisory: state.spray_advisory
+
+    # --------------------------------------------------------------------------
+    # Stage 5: Grounding Synthesis & Uncertainty Gatekeeper
+    # --------------------------------------------------------------------------
+    - id: context_assembly
+      name: Authoritative Grounding Assembly
+      type: transformer
+      rules:
+        - name: uncertainty_check
+          condition: state.confidence < 0.60 || state.quality_status != "Passed"
+          set:
+            state.requires_expert_confirmation: true
+        - name: spray_rule
+          condition: state.weather_data.current.precipitation > 2.0 || state.weather_data.forecast[0].rain_prob > 60
+          set:
+            state.spray_advisory: "DO NOT SPRAY: Rain forecast within 24h will cause chemical runoff."
+
+    # --------------------------------------------------------------------------
+    # Stage 6: Multilingual Agricultural Reasoning
+    # --------------------------------------------------------------------------
+    - id: agricultural_reasoning
+      name: Grounded Agricultural LLM Reasoning
+      type: llm_reasoning
+      tool: sarvam_agricultural_reasoner
+      config:
+        model: sarvam-105b-conversations
+        system_prompt_ref: SYSTEM_PROMPT
+        strict_grounding: true
+        prioritize_organic_controls: true
+        prevent_fabricated_dosages: true
+
+    # --------------------------------------------------------------------------
+    # Stage 7: Voice Synthesis
+    # --------------------------------------------------------------------------
+    - id: voice_synthesis
+      name: Tamil/English Voice Audio Synthesis
+      type: tool_execution
+      tool: sarvam_bulbul_tts
+      config:
+        model: bulbul:v3
+        output_format: wav
+
+    # --------------------------------------------------------------------------
+    # Stage 8: Evidence & Cloud Persistence
+    # --------------------------------------------------------------------------
+    - id: persistence
+      name: Supabase Cloud History Persistence
+      type: storage
+      tool: supabase_persistence
+      config:
+        tables:
+          - crop_analyses
+          - chat_history
+          - recommendations
+        graceful_offline_fallback: true
+
+  outputs:
+    recommendation: state.reasoning_output
+    crop_prediction: state.crop_prediction
+    weather_context: state.weather_data
+    spray_advisory: state.spray_advisory
+    requires_expert_confirmation: state.requires_expert_confirmation
+    audio_base64: state.audio_base64
+    execution_trace: state.execution_trace

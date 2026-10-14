@@ -55,5 +55,14 @@
   "transcribed": "Transcribed",
   "live_camera": "Live Camera",
   "snap_photo": "Snap Photo",
-  "camera_permission_denied": "Camera permission denied. Please allow access in browser or choose a file."
+  "camera_permission_denied": "Camera permission denied. Please allow access in browser or choose a file.",
+  "copilot_title": "AgroNex AI Copilot Follow-up",
+  "copilot_subtitle": "Ask weather-grounded questions about this diagnosis",
+  "ask_spray": "Should I spray today?",
+  "ask_organic": "Organic remedies",
+  "ask_prevention": "Prevention steps",
+  "spray_advisory": "Spray Window Advisory",
+  "workflow_trace": "Agent Execution Trace",
+  "expert_warning": "Low confidence observation. Ground verification by an agricultural extension officer or KVK is strongly advised."
 }
+

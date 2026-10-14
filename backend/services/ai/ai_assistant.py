@@ -11,19 +11,17 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are AgroNex, an AI agricultural assistant for farmers.
+SYSTEM_PROMPT = """You are AgroNex, an AI agricultural copilot for smallholder and commercial farmers.
 
-You can communicate naturally in Tamil, English, and Tamil-English code-mixed language.
-
-Give practical, simple and safe agricultural guidance. Keep your responses concise, conversational, and direct (within 2-4 sentences) so they are easy to listen to.
-
-If the farmer asks about crop disease, explain possible causes and recommend appropriate next steps.
-
-Never claim a disease is confirmed unless reliable prediction information is provided.
-
-Do not invent weather information. Weather information must come from AgroNex's real weather API when available.
-
-Prefer answering in the same language/style used by the farmer."""
+CORE PRINCIPLES & SAFETY RULES:
+1. Grounded Agricultural Reasoning: Base your advice strictly on provided factual observations (crop disease model output, quality checks, and real-time weather metrics). Never fabricate weather data or invented disease conditions.
+2. Model Prediction vs. Diagnosis: Always distinguish an AI visual observation from a certified agronomist diagnosis. If confidence is uncertain (<60%) or image quality is degraded, explicitly advise the farmer to verify with a local Krishi Vigyan Kendra (KVK) or agricultural extension officer before expensive interventions.
+3. Weather-Integrated Spray Window:
+   - If rain (>60% probability or >5mm) is forecasted within the next 24-48 hours, warn against spraying chemical pesticides/fungicides because rain will wash them off into runoff and waste money.
+   - If high wind (>25 km/h) is present, warn of spray drift hazard.
+4. Responsible Plant Protection: Prioritize cultural and bio-control methods (proper spacing, removing infected debris, neem oil, Trichoderma viride) before recommending chemical options. Never fabricate chemical dosages or unverified proprietary brand mixtures.
+5. Communication Style: Conversational, empathetic, and direct (3-5 concise sentences). Provide clear, actionable bullet points for immediate farmer steps.
+6. Language: Respond in the farmer's preferred language (Tamil, English, or natural Tamil-English code-mix commonly used by Tamil Nadu farmers)."""
 
 class AIAssistant:
     def __init__(self):
@@ -61,11 +59,70 @@ class AIAssistant:
         clean = re.sub(r'\n+', ' ', clean).strip()
         return clean
 
+    def _format_context_block(self, context: dict) -> str:
+        """Serializes crop diagnosis and real-time weather into an authoritative grounding block."""
+        if not context:
+            return ""
+
+        parts = ["\n--- AUTHORITATIVE GROUNDING DATA (REAL-TIME SENSORS & MODELS) ---"]
+        if "crop" in context or "condition" in context:
+            crop_name = context.get("crop", "Unknown Crop")
+            cond = context.get("condition", "Healthy")
+            conf = context.get("confidence", 0.0)
+            status = context.get("status", "Evaluated")
+            quality = context.get("quality_status", "Passed")
+            parts.append(f"- Crop: {crop_name}")
+            parts.append(f"- Visual Model Observation: {cond} ({conf:.1f}% confidence, Status: {status})")
+            parts.append(f"- Leaf Image Quality Gate: {quality}")
+            if context.get("warning_message"):
+                parts.append(f"- Image Warning: {context.get('warning_message')}")
+
+        if "weather" in context and isinstance(context["weather"], dict):
+            w = context["weather"]
+            curr = w.get("current", {})
+            parts.append(f"- Local Weather: Temp {curr.get('temperature', 'N/A')}°C, Humidity {curr.get('humidity', 'N/A')}%, Wind {curr.get('wind_speed', 'N/A')} km/h, Rain {curr.get('precipitation', 0)} mm")
+            if w.get("alerts"):
+                alerts_str = "; ".join([a.get("message_en", a.get("alert_type", "")) for a in w["alerts"]])
+                parts.append(f"- Active Agricultural Weather Alerts: {alerts_str}")
+
+        if "spray_advisory" in context:
+            parts.append(f"- Spray Window Feasibility: {context['spray_advisory']}")
+
+        parts.append("----------------------------------------------------------------\n")
+        return "\n".join(parts)
+
+    def _generate_fallback_response(self, question: str, language: str, context: dict = None) -> str:
+        """Deterministic, grounded agricultural response if Sarvam AI is offline or key missing."""
+        is_tamil = language == "ta"
+        crop = context.get("crop", "பயிர்" if is_tamil else "crop") if context else ("பயிர்" if is_tamil else "crop")
+        cond = context.get("condition", "ஆரோக்கியமானது" if is_tamil else "Healthy") if context else ""
+        weather = context.get("weather", {}) if context else {}
+        alerts = weather.get("alerts", []) if isinstance(weather, dict) else []
+
+        if is_tamil:
+            lines = [f"அக்ரோநெக்ஸ் விவசாய வழிகாட்டல்:"]
+            if cond:
+                clean_cond = cond.replace('_', ' ')
+                lines.append(f"• கண்டறியப்பட்ட நிலை: {crop} - {clean_cond}.")
+            if alerts:
+                lines.append(f"• வானிலை எச்சரிக்கை: {alerts[0].get('message_ta', 'மழை வாய்ப்பு உள்ளது, பூச்சிக்கொல்லி தெளிப்பதை தவிர்க்கவும்.')}")
+            lines.append("• பரிந்துரை: பாதிக்கப்பட்ட இலைகளை உடனே அகற்றவும். இயற்கை வேப்ப எண்ணெய் (3%) தெளிக்கவும்.")
+            lines.append("• துல்லியமான உறுதிப்படுத்தலுக்கு அருகிலுள்ள வேளாண்மை உதவி அலுவலரை (KVK) அணுகவும்.")
+            return "\n".join(lines)
+        else:
+            lines = [f"AgroNex Agricultural Copilot Guidance:"]
+            if cond:
+                clean_cond = cond.replace('_', ' ')
+                lines.append(f"• Model Observation: {crop} ({clean_cond}).")
+            if alerts:
+                lines.append(f"• Weather Advisory: {alerts[0].get('message_en', 'Rain or high humidity expected. Postpone chemical sprays.')}")
+            lines.append("• Immediate Action: Prune affected leaves, ensure proper field drainage, and consider bio-controls like Neem-based spray.")
+            lines.append("• For uncertain or severe symptoms, please verify with your local agricultural extension officer (KVK).")
+            return "\n".join(lines)
+
     def answer(self, question: str, language: str = "en", context: dict = None) -> str:
         if not self.client:
-            if language == "ta":
-                return "மன்னிக்கவும், AI சேவைக்கான API சாவி கிடைக்கவில்லை."
-            return "AgroNex AI service is temporarily unavailable because the API key is not configured."
+            return self._generate_fallback_response(question, language, context)
 
         try:
             prompt_modifier = ""
@@ -74,19 +131,23 @@ class AIAssistant:
             elif language == "en":
                 prompt_modifier = "\nPlease answer in simple, direct English."
 
+            grounding_text = self._format_context_block(context) if context else ""
+
+            user_content = f"{grounding_text}Farmer Question: {question}" if grounding_text else question
+
             response = self.client.chat.completions(
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT + prompt_modifier},
-                    {"role": "user", "content": question},
+                    {"role": "user", "content": user_content},
                 ],
                 model="sarvam-105b-conversations",
             )
             if response.choices and len(response.choices) > 0:
                 return response.choices[0].message.content.strip()
-            return "No response received from AI model."
+            return self._generate_fallback_response(question, language, context)
         except Exception as e:
             logger.error(f"Error in chat completion: {e}")
-            return "மன்னிக்கவும், பதிலை உருவாக்குவதில் சிக்கல் ஏற்பட்டது. மீண்டும் முயற்சிக்கவும்." if language == "ta" else "Sorry, there was an issue generating a response. Please try again."
+            return self._generate_fallback_response(question, language, context)
 
     def speech_to_text(self, audio_bytes: bytes, filename: str = "audio.wav", content_type: str = "audio/wav") -> tuple[str, str]:
         if not self.client:
@@ -144,7 +205,14 @@ class AIAssistant:
             logger.error(f"TTS conversion failed: {e}")
         return None
 
-    def process_voice_chat(self, audio_bytes: bytes, filename: str = "audio.wav", preferred_language: str = "ta", content_type: str = "audio/wav") -> dict:
+    def process_voice_chat(
+        self,
+        audio_bytes: bytes,
+        filename: str = "audio.wav",
+        preferred_language: str = "ta",
+        content_type: str = "audio/wav",
+        context: dict = None
+    ) -> dict:
         # Step 1: Speech-to-Text (Saaras v4)
         detected_lang = "ta-IN" if "ta" in preferred_language else "en-IN"
         transcript = ""
@@ -163,8 +231,12 @@ class AIAssistant:
                 "audio_base64": audio_data,
             }
 
-        # Step 2: Sarvam-105B Chatbot
-        ai_reply = self.answer(transcript, language="ta" if "ta" in detected_lang else preferred_language)
+        # Step 2: Sarvam-105B Chatbot with grounded agricultural context
+        ai_reply = self.answer(
+            transcript,
+            language="ta" if "ta" in detected_lang else preferred_language,
+            context=context
+        )
 
         # Step 3: Text-to-Speech (Bulbul v3)
         audio_base64 = self.text_to_speech(ai_reply, language_code=detected_lang)

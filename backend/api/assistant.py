@@ -6,11 +6,12 @@ from services.ai.ai_assistant import AIAssistant
 router = APIRouter()
 assistant = AIAssistant()
 
+import json
 @router.post("/chat", response_model=schemas.ChatResponse)
 def chat(message: schemas.ChatMessage):
     try:
         lang = message.language or "en"
-        reply = assistant.answer(message.message, lang, {})
+        reply = assistant.answer(message.message, lang, context=message.context)
         audio_base64 = assistant.text_to_speech(reply, language_code="ta-IN" if lang == "ta" else "en-IN")
         return {"reply": reply, "audio_base64": audio_base64}
     except Exception as e:
@@ -20,6 +21,7 @@ def chat(message: schemas.ChatMessage):
 async def voice_chat(
     file: UploadFile = File(...),
     language: Optional[str] = Form("ta"),
+    context: Optional[str] = Form(None)
 ):
     try:
         audio_bytes = await file.read()
@@ -38,11 +40,19 @@ async def voice_chat(
             else:
                 filename = f"{filename}.webm"
 
+        parsed_context = None
+        if context:
+            try:
+                parsed_context = json.loads(context)
+            except Exception:
+                parsed_context = {"raw_context": context}
+
         result = assistant.process_voice_chat(
             audio_bytes=audio_bytes,
             filename=filename,
             preferred_language=language or "ta",
             content_type=file.content_type or "audio/wav",
+            context=parsed_context
         )
         return result
     except Exception as e:

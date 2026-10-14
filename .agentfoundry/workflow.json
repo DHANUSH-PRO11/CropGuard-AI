@@ -1,0 +1,61 @@
+{
+  "id": "agronex-farming-copilot",
+
+  "name": "AgroNex Agent — Autonomous Agricultural Copilot",
+  "version": "1.0.0",
+  "description": "Multi-modal AI Copilot for farmers coordinating computer-vision disease diagnosis, live weather feeds, and Sarvam AI reasoning.",
+  "entrypoint": "backend.services.agent.agronex_agent:AgroNexAgent",
+  "api_route": "/api/agent/run",
+  "languages": ["en", "ta", "ta-IN"],
+  "nodes": [
+    {
+      "id": "input_ingestion",
+      "name": "Multimodal Input Ingestion",
+      "type": "input",
+      "tools": ["sarvam_stt"]
+    },
+    {
+      "id": "intent_routing",
+      "name": "Adaptive Tool Routing",
+      "type": "router"
+    },
+    {
+      "id": "disease_detection",
+      "name": "EfficientNetV2 Disease Prediction",
+      "type": "model_inference",
+      "tools": ["efficientnet_v2_onnx", "quality_gatekeeper"]
+    },
+    {
+      "id": "weather_lookup",
+      "name": "Micro-climate Meteorological Analysis",
+      "type": "external_api",
+      "tools": ["open_meteo_api", "weather_alert_rules"]
+    },
+    {
+      "id": "context_assembly",
+      "name": "Grounding Synthesis & Safety Dock",
+      "type": "transformer",
+      "thresholds": {
+        "uncertainty_cutoff": 0.60
+      }
+    },
+    {
+      "id": "agricultural_reasoning",
+      "name": "Agricultural LLM Reasoning",
+      "type": "llm",
+      "model": "sarvam-105b-conversations"
+    },
+    {
+      "id": "voice_synthesis",
+      "name": "Audio Synthesis",
+      "type": "tts",
+      "model": "bulbul:v3"
+    },
+    {
+      "id": "persistence",
+      "name": "Supabase Storage & DB",
+      "type": "database",
+      "optional": true
+    }
+  ]
+}
