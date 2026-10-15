@@ -30,6 +30,8 @@ async def analyze_crop(
     filename = os.path.basename(file.filename or "leaf.jpg")
     file_path = f"uploads/{filename}"
     file_bytes = await file.read()
+    if len(file_bytes) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Uploaded file exceeds maximum allowed size of 10 MB.")
     
     with open(file_path, "wb") as buffer:
         buffer.write(file_bytes)

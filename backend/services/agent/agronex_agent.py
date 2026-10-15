@@ -271,7 +271,11 @@ class AgroNexAgent:
             alerts = weather_data.get("alerts", [])
             rain_prob = 0
             if weather_data.get("forecast") and len(weather_data["forecast"]) > 0:
-                rain_prob = weather_data["forecast"][0].get("precipitation_probability_mean", 0)
+                rain_prob = max(rain_prob, weather_data["forecast"][0].get("precipitation_probability_mean", 0) or 0)
+            if weather_data.get("hourly"):
+                hourly_rain = [h.get("precipitation_probability", 0) or 0 for h in weather_data["hourly"][:24]]
+                if hourly_rain:
+                    rain_prob = max(rain_prob, max(hourly_rain))
 
             wind_speed = current.get("wind_speed", 0) or 0
             precip = current.get("precipitation", 0) or 0
@@ -401,11 +405,15 @@ class AgroNexAgent:
         except Exception as e:
             logger.warning(f"Local DB persistence fallback error: {e}")
 
+        backend_used = "supabase" if (db is not None and not persistence_error and persisted) else ("sqlite_fallback" if persisted else "none")
+        node_status = "completed" if (persisted and not persistence_error and db is not None) else ("offline_fallback" if persisted else "error")
+
         log_node(
             "persistence",
-            "completed" if persisted else ("offline_fallback" if db is None else "error"),
+            node_status,
             {
                 "persisted": persisted,
+                "storage_backend": backend_used,
                 "supabase_used": db is not None,
                 "error": persistence_error
             },
@@ -436,7 +444,8 @@ class AgroNexAgent:
                 "model_status": crop_prediction.get("status") if crop_prediction else "No Image",
                 "quality_gate": crop_prediction.get("quality_status") if crop_prediction else "N/A",
                 "weather_active": bool(weather_data and weather_data.get("success")),
-                "persisted": persisted
+                "persisted": persisted,
+                "storage_backend": backend_used
             },
             "tools_called": list(set(tools_called)),
             "total_latency_ms": total_latency_ms,

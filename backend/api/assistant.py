@@ -14,6 +14,8 @@ def chat(message: schemas.ChatMessage):
         reply = assistant.answer(message.message, lang, context=message.context)
         audio_base64 = assistant.text_to_speech(reply, language_code="ta-IN" if lang == "ta" else "en-IN")
         return {"reply": reply, "audio_base64": audio_base64}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -27,6 +29,8 @@ async def voice_chat(
         audio_bytes = await file.read()
         if not audio_bytes:
             raise HTTPException(status_code=400, detail="Empty audio file received")
+        if len(audio_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Audio file exceeds maximum allowed size of 10 MB.")
 
         filename = file.filename or "recording.webm"
         if "." not in filename:
@@ -55,5 +59,7 @@ async def voice_chat(
             context=parsed_context
         )
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

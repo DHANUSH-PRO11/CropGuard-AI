@@ -2,14 +2,18 @@
 FastAPI Router for AgroNex Agent — Agricultural Copilot Endpoints
 """
 
+import io
 import json
 from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from pydantic import BaseModel
 from supabase import Client
+from PIL import Image
 
 from config.database import get_supabase
 from services.agent.agronex_agent import AgroNexAgent
+
+MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB maximum upload limit
 
 router = APIRouter(prefix="/api/agent", tags=["AgroNex Agent"])
 agent = AgroNexAgent()
@@ -45,12 +49,21 @@ async def run_agent_workflow(
         if not image.content_type.startswith("image/"):
             raise HTTPException(status_code=400, detail="Provided file is not an image.")
         image_bytes = await image.read()
+        if len(image_bytes) > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(status_code=413, detail="Image file exceeds maximum allowed size of 10 MB.")
+        try:
+            with Image.open(io.BytesIO(image_bytes)) as img_check:
+                img_check.verify()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Provided file is not a valid or supported image.")
         image_filename = image.filename
 
     audio_bytes = None
     audio_filename = None
     if audio is not None:
         audio_bytes = await audio.read()
+        if len(audio_bytes) > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(status_code=413, detail="Audio file exceeds maximum allowed size of 10 MB.")
         audio_filename = audio.filename
 
     parsed_context = None
@@ -109,10 +122,11 @@ def get_workflow_manifest():
             {"id": "intent_routing", "type": "conditional_router", "tools": []},
             {"id": "disease_detection", "type": "vision_inference", "tools": ["efficientnet_v2_onnx", "quality_gatekeeper"]},
             {"id": "weather_lookup", "type": "meteorological_feed", "tools": ["open_meteo_api", "weather_alert_rules"]},
+            {"id": "schemes_provider", "type": "knowledge_retrieval", "tools": ["government_schemes_database"]},
             {"id": "context_assembly", "type": "grounding_synthesizer", "tools": ["spray_window_evaluator"]},
             {"id": "agricultural_reasoning", "type": "llm_copilot", "tools": ["sarvam_105b_conversations"]},
             {"id": "voice_synthesis", "type": "audio_generator", "tools": ["sarvam_bulbul_v3"]},
-            {"id": "persistence", "type": "cloud_storage", "tools": ["supabase_postgres", "supabase_storage"]}
+            {"id": "persistence", "type": "cloud_storage", "tools": ["supabase_postgres", "supabase_storage", "local_sqlite"]}
         ],
         "languages": ["ta", "en", "code-mix"],
         "safety_boundaries": [

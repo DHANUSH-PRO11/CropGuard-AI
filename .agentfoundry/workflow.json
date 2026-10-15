@@ -32,6 +32,12 @@
       "tools": ["open_meteo_api", "weather_alert_rules"]
     },
     {
+      "id": "schemes_provider",
+      "name": "Government Welfare & Subsidy Engine",
+      "type": "knowledge_retrieval",
+      "tools": ["government_schemes_database"]
+    },
+    {
       "id": "context_assembly",
       "name": "Grounding Synthesis & Safety Dock",
       "type": "transformer",
