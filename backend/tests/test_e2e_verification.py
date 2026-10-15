@@ -19,6 +19,7 @@ import os
 import sys
 import time
 import unittest
+import wave
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -58,13 +59,46 @@ def create_in_memory_leaf(width=224, height=224, blur=False, green=True) -> byte
     return buf.getvalue()
 
 
+def create_in_memory_wav(duration_sec=1.0, sample_rate=16000) -> bytes:
+    """Generates synthetic in-memory WAV audio bytes for controlled testing."""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        n_frames = int(duration_sec * sample_rate)
+        wav_file.writeframes(b"\x00\x00" * n_frames)
+    return buf.getvalue()
+
+
 class TestAgroNexE2EVerification(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.client = TestClient(app)
         cls.agent = AgroNexAgent()
         cls.test_png_path = backend_dir / "test_tomato.png"
-        cls.test_wav_path = backend_dir.parent / "test_output.wav"
+
+        # Locate or generate synthetic test WAV file so tests run reliably in CI
+        candidate_paths = [
+            backend_dir / "test_output.wav",
+            backend_dir.parent / "test_output.wav"
+        ]
+        existing_wav = next((p for p in candidate_paths if p.exists()), None)
+        if existing_wav:
+            cls.test_wav_path = existing_wav
+            cls._created_test_wav = False
+        else:
+            cls.test_wav_path = backend_dir / "test_output.wav"
+            cls.test_wav_path.write_bytes(create_in_memory_wav())
+            cls._created_test_wav = True
+
+    @classmethod
+    def tearDownClass(cls):
+        if getattr(cls, "_created_test_wav", False) and cls.test_wav_path and cls.test_wav_path.exists():
+            try:
+                cls.test_wav_path.unlink()
+            except OSError:
+                pass
 
     # =========================================================================
     # SCENARIO 1: Workflow Manifest
@@ -296,6 +330,10 @@ class TestAgroNexE2EVerification(unittest.TestCase):
     # =========================================================================
     def test_06_voice_pipeline_and_quota_resilience(self):
         """Tests audio ingestion, STT/TTS routing, and graceful behavior under quota or network constraints."""
+        if not self.test_wav_path or not self.test_wav_path.exists():
+            self.test_wav_path = backend_dir / "test_output.wav"
+            self.test_wav_path.write_bytes(create_in_memory_wav())
+
         self.assertTrue(self.test_wav_path.exists())
         with open(self.test_wav_path, "rb") as f:
             audio_bytes = f.read()
