@@ -23,6 +23,10 @@ export default function CropCheck() {
       setErrorMsg("Please upload an image file (JPG, PNG, WEBP).");
       return;
     }
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMsg(isTamil ? "கோப்பின் அளவு 10 MB க்கும் குறைவாக இருக்க வேண்டும்." : "Image file exceeds maximum allowed size of 10 MB.");
+      return;
+    }
     setErrorMsg(null);
     setFileObj(file);
     const img = URL.createObjectURL(file);

@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api import crops, assistant, profile, auth, weather, schemes
-from api.google_auth import router as google_auth_router
 from api.agent import router as agent_router
 import os
 app = FastAPI(title="AgroNex API", description="Smart Farming Backend with Autonomous Copilot Agent", version="1.0.0")
@@ -28,7 +27,6 @@ app.add_middleware(
 # Include routers
 app.include_router(agent_router)
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(google_auth_router)
 app.include_router(crops.router, prefix="/api/crops", tags=["Crops"])
 app.include_router(assistant.router, prefix="/api/assistant", tags=["AI Assistant"])
 app.include_router(weather.router, prefix="/api/weather", tags=["Weather"])

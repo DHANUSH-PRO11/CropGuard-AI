@@ -140,6 +140,29 @@ export default function Weather() {
               </button>
             </form>
           )}
+
+          {/* Quick Regional Agricultural District Presets */}
+          <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider shrink-0 mr-1">
+              {isTamil ? "முக்கிய பகுதிகள்:" : "Agri Hubs:"}
+            </span>
+            {[
+              { name: "Coimbatore", ta: "கோயம்புத்தூர்", lat: 11.0168, lon: 76.9558 },
+              { name: "Thanjavur", ta: "தஞ்சாவூர்", lat: 10.7870, lon: 79.1378 },
+              { name: "Madurai", ta: "மதுரை", lat: 9.9252, lon: 78.1198 },
+              { name: "Salem", ta: "சேலம்", lat: 11.6643, lon: 78.1460 },
+              { name: "Trichy", ta: "திருச்சி", lat: 10.7905, lon: 78.7047 }
+            ].map((dist) => (
+              <button
+                key={dist.name}
+                type="button"
+                onClick={() => updateLocationManually(dist.lat, dist.lon, dist.name, "Tamil Nadu", "India")}
+                className="px-2.5 py-1 bg-gray-50 hover:bg-emerald-50 hover:text-emerald-800 text-gray-600 rounded-lg font-medium whitespace-nowrap border border-gray-200/60 transition-all text-[11px] cursor-pointer"
+              >
+                {isTamil ? dist.ta : dist.name}
+              </button>
+            ))}
+          </div>
         </div>
 
         {locError && (
@@ -226,6 +249,62 @@ export default function Weather() {
               
               <CloudSun size={200} className="absolute -bottom-16 -right-16 opacity-10 pointer-events-none text-white" />
             </div>
+
+            {/* Configured Agricultural Spray Safety Rule Engine */}
+            {(() => {
+              const precip = weather.current.precipitation || 0;
+              const wind = weather.current.wind_speed || 0;
+              let maxRainProb = 0;
+              if (weather.hourly && weather.hourly.length > 0) {
+                maxRainProb = Math.max(...weather.hourly.slice(0, 24).map(h => h.precipitation_probability || 0));
+              }
+
+              const isRainRisk = maxRainProb > 60 || precip > 2.0;
+              const isWindRisk = wind > 25;
+
+              let badgeColor = "bg-emerald-50 border-emerald-200 text-emerald-900";
+              let badgeTitle = isTamil ? "தெளிப்புக்கு சாதகமான நேரம் (Safe Window)" : "Favorable Spray Window";
+              let badgeMsg = isTamil 
+                ? "அடுத்த 24 மணி நேரத்தில் குறைந்த காற்று மற்றும் குறைந்த மழை வாய்ப்பு (<60%)."
+                : "Wind is moderate and rain probability is below 60% in the immediate 24-hour forecast.";
+
+              if (isRainRisk) {
+                badgeColor = "bg-red-50 border-red-200 text-red-900";
+                badgeTitle = isTamil ? "தெளிக்க வேண்டாம் (Do Not Spray)" : "Unfavorable Spray Window (Rain Hazard)";
+                badgeMsg = isTamil
+                  ? `மழை வாய்ப்பு ${maxRainProb}% (>60%) அல்லது மழை அளவு >2 மி.மீ. மருந்து அடித்துச் செல்லப்படும் அபாயம்.`
+                  : `Rain probability reaches ${maxRainProb}% (>60%) or precipitation >2mm. High chemical wash-off and runoff risk.`;
+              } else if (isWindRisk) {
+                badgeColor = "bg-amber-50 border-amber-200 text-amber-900";
+                badgeTitle = isTamil ? "எச்சரிக்கையுடன் தெளிக்கவும் (Caution Spraying)" : "Caution Spraying (Drift Hazard)";
+                badgeMsg = isTamil
+                  ? `காற்றின் வேகம் ${wind} கி.மீ/மணி (>25 கி.மீ/மணி). மருந்து காற்றில் பரவி வீணாகும் அபாயம்.`
+                  : `Wind speed is ${wind} km/h (>25 km/h). Significant risk of chemical drift to non-target areas.`;
+              }
+
+              return (
+                <div className={`p-4 sm:p-5 rounded-3xl border ${badgeColor} space-y-2.5 shadow-2xs`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-white/70 border border-current">
+                      {isTamil ? "தானியங்கி தெளிப்பு விதிமுறைகள்" : "Configured Agricultural Spray Rules"}
+                    </span>
+                    <span className="text-[10px] text-gray-500 font-medium">
+                      {weather.offline_fallback ? "Offline Fallback" : "Live Open-Meteo Data"}
+                    </span>
+                  </div>
+                  <div>
+                    <h4 className="font-extrabold text-sm">{badgeTitle}</h4>
+                    <p className="text-xs leading-relaxed opacity-90 mt-0.5">{badgeMsg}</p>
+                  </div>
+                  <div className="pt-2 border-t border-black/5 text-[11px] opacity-75 leading-relaxed">
+                    <strong>{isTamil ? "முக்கிய அறிவிப்பு:" : "Regulatory Notice:"} </strong>
+                    {isTamil
+                      ? "வானிலை கணிப்புகள் எதிர்கால நிலைக்கு முழு உத்தரவாதம் அளிக்காது. பூச்சிக்கொல்லி லேபிளில் உள்ள வழிகாட்டுதல்கள், பாதுகாப்பு ஆடைகள் மற்றும் வட்டார வேளாண்மை அலுவலர் ஆலோசனைகளுக்கே முதன்மையான முன்னுரிமை."
+                      : "Forecasts do not guarantee future conditions. Registered pesticide label instructions, safety buffer zones, and agricultural university guidelines supersede automated mathematical thresholds."}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Today Hourly Forecast */}
             {weather.hourly && weather.hourly.length > 0 && (

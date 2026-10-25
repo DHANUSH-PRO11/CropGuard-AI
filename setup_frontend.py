@@ -172,18 +172,6 @@ export default function Login() {
           </button>
         </form>
 
-        <div className="mt-8 flex items-center gap-4">
-          <div className="h-px bg-gray-200 flex-1"></div>
-          <span className="text-gray-400 text-sm">Or log in with:</span>
-          <div className="h-px bg-gray-200 flex-1"></div>
-        </div>
-
-        <div className="mt-6 flex justify-center gap-4">
-          <button className="w-12 h-12 rounded-full border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors">
-            <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-6 h-6" />
-          </button>
-        </div>
-        
         <p className="text-center mt-8 text-sm text-gray-500">
           {t('dont_have_account').split('?')[0]}? <Link to="/register" className="text-agronex-primary font-bold">{t('dont_have_account').split('?')[1]}</Link>
         </p>

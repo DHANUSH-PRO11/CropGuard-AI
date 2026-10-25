@@ -38,7 +38,10 @@ def get_profile(
                     "location": p.get("location") or "Tamil Nadu",
                     "farm_size": p.get("farm_size", 2.5),
                     "primary_crop": p.get("primary_crop", "Paddy, Tomato"),
-                    "preferred_language": p.get("preferred_language", "en")
+                    "preferred_language": p.get("preferred_language", "en"),
+                    "notify_weather": p.get("notify_weather", True),
+                    "notify_spray": p.get("notify_spray", True),
+                    "notify_schemes": p.get("notify_schemes", True)
                 }
         except Exception as e:
             logger.warning(f"Supabase profile query failed: {e}. Falling back to local DB.")

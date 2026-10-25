@@ -44,10 +44,24 @@ def init_local_db():
                 primary_crop TEXT DEFAULT 'Paddy',
                 location TEXT,
                 preferred_language TEXT DEFAULT 'en',
+                notify_weather INTEGER DEFAULT 1,
+                notify_spray INTEGER DEFAULT 1,
+                notify_schemes INTEGER DEFAULT 1,
                 updated_at TEXT NOT NULL,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
             """)
+            # Safe migration for existing farmer_profiles tables
+            cur = conn.cursor()
+            cur.execute("PRAGMA table_info(farmer_profiles)")
+            cols = [col[1] for col in cur.fetchall()]
+            if "notify_weather" not in cols:
+                conn.execute("ALTER TABLE farmer_profiles ADD COLUMN notify_weather INTEGER DEFAULT 1;")
+            if "notify_spray" not in cols:
+                conn.execute("ALTER TABLE farmer_profiles ADD COLUMN notify_spray INTEGER DEFAULT 1;")
+            if "notify_schemes" not in cols:
+                conn.execute("ALTER TABLE farmer_profiles ADD COLUMN notify_schemes INTEGER DEFAULT 1;")
+
             conn.execute("""
             CREATE TABLE IF NOT EXISTS crop_analyses (
                 id TEXT PRIMARY KEY,
@@ -155,12 +169,20 @@ def get_or_create_profile(user_id: Optional[str] = None) -> Dict[str, Any]:
             cur.execute("SELECT * FROM farmer_profiles WHERE user_id = ?", (user_id,))
             row = cur.fetchone()
             if row:
-                return dict(row)
+                res = dict(row)
+                res["notify_weather"] = bool(res.get("notify_weather", 1))
+                res["notify_spray"] = bool(res.get("notify_spray", 1))
+                res["notify_schemes"] = bool(res.get("notify_schemes", 1))
+                return res
 
         cur.execute("SELECT * FROM farmer_profiles ORDER BY updated_at DESC LIMIT 1")
         row = cur.fetchone()
         if row:
-            return dict(row)
+            res = dict(row)
+            res["notify_weather"] = bool(res.get("notify_weather", 1))
+            res["notify_spray"] = bool(res.get("notify_spray", 1))
+            res["notify_schemes"] = bool(res.get("notify_schemes", 1))
+            return res
 
         # Default farmer fallback
         return {
@@ -169,7 +191,10 @@ def get_or_create_profile(user_id: Optional[str] = None) -> Dict[str, Any]:
             "location": "Coimbatore, Tamil Nadu",
             "farm_size": 3.5,
             "primary_crop": "Paddy, Tomato",
-            "preferred_language": "ta"
+            "preferred_language": "ta",
+            "notify_weather": True,
+            "notify_spray": True,
+            "notify_schemes": True
         }
     finally:
         conn.close()
@@ -189,6 +214,10 @@ def update_farmer_profile(profile_data: Dict[str, Any], user_id: Optional[str] =
                 cur.execute("SELECT id FROM farmer_profiles ORDER BY updated_at DESC LIMIT 1")
                 existing = cur.fetchone()
 
+            nw = 1 if profile_data.get("notify_weather") is True else (0 if profile_data.get("notify_weather") is False else None)
+            ns = 1 if profile_data.get("notify_spray") is True else (0 if profile_data.get("notify_spray") is False else None)
+            nc = 1 if profile_data.get("notify_schemes") is True else (0 if profile_data.get("notify_schemes") is False else None)
+
             if existing:
                 prof_id = existing["id"]
                 conn.execute("""
@@ -199,6 +228,9 @@ def update_farmer_profile(profile_data: Dict[str, Any], user_id: Optional[str] =
                     primary_crop = COALESCE(?, primary_crop),
                     location = COALESCE(?, location),
                     preferred_language = COALESCE(?, preferred_language),
+                    notify_weather = COALESCE(?, notify_weather),
+                    notify_spray = COALESCE(?, notify_spray),
+                    notify_schemes = COALESCE(?, notify_schemes),
                     updated_at = ?
                 WHERE id = ?
                 """, (
@@ -208,14 +240,17 @@ def update_farmer_profile(profile_data: Dict[str, Any], user_id: Optional[str] =
                     profile_data.get("primary_crop"),
                     profile_data.get("location"),
                     profile_data.get("preferred_language"),
+                    nw,
+                    ns,
+                    nc,
                     now,
                     prof_id
                 ))
             else:
                 prof_id = str(uuid.uuid4())
                 conn.execute("""
-                INSERT INTO farmer_profiles (id, user_id, name, mobile, farm_size, primary_crop, location, preferred_language, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO farmer_profiles (id, user_id, name, mobile, farm_size, primary_crop, location, preferred_language, notify_weather, notify_spray, notify_schemes, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     prof_id,
                     user_id,
@@ -225,6 +260,9 @@ def update_farmer_profile(profile_data: Dict[str, Any], user_id: Optional[str] =
                     profile_data.get("primary_crop", "Tomato"),
                     profile_data.get("location", "Tamil Nadu"),
                     profile_data.get("preferred_language", "en"),
+                    1 if nw is None or nw == 1 else 0,
+                    1 if ns is None or ns == 1 else 0,
+                    1 if nc is None or nc == 1 else 0,
                     now
                 ))
         return get_or_create_profile(user_id)
@@ -265,6 +303,17 @@ def get_recent_crop_analyses(limit: int = 20) -> List[Dict[str, Any]]:
     finally:
         conn.close()
 
+def delete_crop_analysis(record_id: str) -> bool:
+    """Deletes a crop analysis record from local database by ID."""
+    conn = get_connection()
+    try:
+        with conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM crop_analyses WHERE id = ?", (record_id,))
+            return cur.rowcount > 0
+    finally:
+        conn.close()
+
 # --- Chat History Helpers ---
 def save_chat_message(role: str, message: str, user_id: Optional[str] = None) -> str:
     """Saves a user or AI chat message into local SQLite chat_history."""
@@ -281,7 +330,7 @@ def save_chat_message(role: str, message: str, user_id: Optional[str] = None) ->
     finally:
         conn.close()
 
-def get_recent_chat_history(user_id: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
+def get_recent_chat_history(user_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
     """Retrieves recent chat history records from local SQLite."""
     conn = get_connection()
     try:
@@ -293,4 +342,19 @@ def get_recent_chat_history(user_id: Optional[str] = None, limit: int = 20) -> L
         return [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()
+
+def clear_chat_history(user_id: Optional[str] = None) -> bool:
+    """Clears chat messages from local SQLite."""
+    conn = get_connection()
+    try:
+        with conn:
+            cur = conn.cursor()
+            if user_id:
+                cur.execute("DELETE FROM chat_history WHERE user_id = ?", (user_id,))
+            else:
+                cur.execute("DELETE FROM chat_history")
+            return True
+    finally:
+        conn.close()
+
 

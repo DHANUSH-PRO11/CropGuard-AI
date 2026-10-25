@@ -387,6 +387,16 @@ export default function Result() {
           <div className="pt-2">
             <WeatherAlerts crop={crop} condition={condition} />
           </div>
+
+          {/* Scientific Disclaimer & Qualified Guidance Priority */}
+          <div className="p-3.5 bg-gray-50 rounded-2xl border border-gray-200/70 text-[11px] text-gray-500 leading-relaxed">
+            <strong className="text-gray-700 block mb-0.5">
+              {isTamil ? 'அறிவியல் மற்றும் ஒழுங்குமுறை அறிவிப்பு:' : 'Scientific & Regulatory Notice:'}
+            </strong>
+            {isTamil
+              ? 'கணினி பார்வை மாதிரி முடிவுகள் ஆரம்பகட்ட கள வழிகாட்டலுக்கு மட்டுமே. இது ஆய்வக உறுதிப்படுத்தல் அல்ல. பூச்சிக்கொல்லி மருந்துகளைப் பயன்படுத்துவதற்கு முன் அதிகாரப்பூர்வ தயாரிப்பு லேபிள் வழிமுறைகள், பாதுகாப்பு இடைவெளிகள் மற்றும் வட்டார வேளாண் பல்கலைக்கழகம்/KVK விஞ்ஞானிகளின் வழிகாட்டலைப் பின்பற்றவும்.'
+              : 'Computer vision observation is an auxiliary decision aid and not a laboratory diagnosis. Prioritize registered pesticide label instructions, safety intervals (PHI), protective gear (PPE), and qualified Krishi Vigyan Kendra (KVK) extension officer recommendations.'}
+          </div>
         </div>
       </div>
     </div>

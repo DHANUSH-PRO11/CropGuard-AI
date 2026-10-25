@@ -9,7 +9,6 @@
   "mobile_or_email": "Mobile Number or Email",
   "password": "Password",
   "forgot_password": "Forgot Password?",
-  "continue_with_google": "Continue with Google",
   "dont_have_account": "Don't have an account? Sign Up",
   "home": "Home",
   "crop": "Crop",
@@ -63,6 +62,17 @@
   "ask_prevention": "Prevention steps",
   "spray_advisory": "Spray Window Advisory",
   "workflow_trace": "Agent Execution Trace",
-  "expert_warning": "Low confidence observation. Ground verification by an agricultural extension officer or KVK is strongly advised."
+  "expert_warning": "Low confidence observation. Ground verification by an agricultural extension officer or KVK is strongly advised.",
+  "schemes": "Govt Schemes",
+  "schemes_subtitle": "Subsidies, credit, insurance, and welfare schemes for Indian farmers",
+  "history_title": "Diagnosis History",
+  "history_subtitle": "Past crop scans, health evaluations, and diagnostic records",
+  "profile_title": "Farmer Profile & Settings",
+  "profile_subtitle": "Manage your farm details, language, and alert notifications",
+  "notifications": "Notifications",
+  "official_portal": "Official Government Portal",
+  "differential_diagnoses": "Alternative Possibilities",
+  "spray_rules_title": "Configured Agricultural Spray Rules",
+  "spray_rules_desc": "Evaluates 24h precipitation probability (>60%), rain volume (>2mm), and wind drift (>25 km/h)."
 }
 

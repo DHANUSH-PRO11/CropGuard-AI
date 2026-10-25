@@ -15,6 +15,11 @@ from services.ai.disease_detector import DiseaseDetector
 from services.ai.ai_assistant import AIAssistant
 from services.weather_service import WeatherService
 from config.database import get_supabase
+from config.weather_thresholds import (
+    SPRAY_RAIN_PROB_THRESHOLD,
+    SPRAY_PRECIP_THRESHOLD_MM,
+    SPRAY_WIND_SPEED_THRESHOLD_KMH
+)
 from supabase import Client
 
 logger = logging.getLogger(__name__)
@@ -280,9 +285,9 @@ class AgroNexAgent:
             wind_speed = current.get("wind_speed", 0) or 0
             precip = current.get("precipitation", 0) or 0
 
-            if rain_prob > 60 or precip > 2.0:
+            if rain_prob > SPRAY_RAIN_PROB_THRESHOLD or precip > SPRAY_PRECIP_THRESHOLD_MM:
                 spray_advisory = "DO NOT SPRAY: High chance of rainfall (>60%). Chemical wash-off hazard."
-            elif wind_speed > 25:
+            elif wind_speed > SPRAY_WIND_SPEED_THRESHOLD_KMH:
                 spray_advisory = "CAUTION SPRAYING: High winds (>25 km/h). Severe spray drift hazard."
             else:
                 spray_advisory = "SAFE SPRAY WINDOW: Low wind and minimal rain probability in immediate 24h."

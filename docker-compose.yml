@@ -12,7 +12,6 @@ services:
       - SARVAM_API_KEY=${SARVAM_API_KEY:-}
       - SUPABASE_URL=${SUPABASE_URL:-}
       - SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY:-}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - FRONTEND_URL=http://localhost:5173
       - ALLOW_ALL_ORIGINS=true
     restart: unless-stopped

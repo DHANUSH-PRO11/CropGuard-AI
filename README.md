@@ -71,7 +71,6 @@ The agentic pipeline is formally specified in [`workflows/agronex_agent_workflow
 │   │   ├── crops.py            # /api/crops (EfficientNetV2 disease detection)
 │   │   ├── assistant.py        # /api/assistant (Sarvam AI voice & chat endpoints)
 │   │   ├── weather.py          # /api/weather (Open-Meteo forecasts)
-│   │   ├── google_auth.py      # /api/google-auth (Google OAuth token verifier)
 │   │   ├── schemes.py          # /api/schemes (PM-KISAN subsidies)
 │   │   └── profile.py          # /api/profile (Farmer profile)
 │   ├── services/
@@ -92,15 +91,17 @@ The agentic pipeline is formally specified in [`workflows/agronex_agent_workflow
 ├── frontend/                   # React 19 + Vite + Tailwind CSS v4 Single Page App
 │   ├── src/
 │   │   ├── pages/
-│   │   │   ├── CropCheck.jsx   (Leaf scanning with camera & drag-drop)
-│   │   │   ├── Result.jsx      (Diagnostic view + interactive AI Copilot follow-up)
-│   │   │   ├── Assistant.jsx   (Full-screen voice & chat assistant)
-│   │   │   ├── Weather.jsx     (24h hourly cards + 7-day forecast + spray alerts)
-│   │   │   ├── Dashboard.jsx   (Farmer farm overview)
-│   │   │   ├── Home.jsx        (Landing page)
-│   │   │   └── Login.jsx       (Google OAuth & Farmer credentials)
-│   │   ├── components/         # Layout, WeatherCard, WeatherAlerts
-│   │   ├── features/googleAuth # Google OAuth client integration
+│   │   │   ├── CropCheck.jsx   (Leaf scanning with camera, drag-drop & validation)
+│   │   │   ├── Result.jsx      (Diagnostic view + differential diagnoses + Copilot follow-up)
+│   │   │   ├── Assistant.jsx   (Full-screen voice & chat assistant + history management)
+│   │   │   ├── Weather.jsx     (24h hourly cards + 7-day forecast + district presets + spray rules)
+│   │   │   ├── Schemes.jsx     (Government subsidies directory with Tamil/English bilingual search)
+│   │   │   ├── History.jsx     (Crop inspection log, summary metrics, detail modals & records deletion)
+│   │   │   ├── Profile.jsx     (Farmer profile, landholding, primary crops & notification settings)
+│   │   │   ├── Dashboard.jsx   (Live farm overview with dynamic scans, chat history & featured schemes)
+│   │   │   ├── Home.jsx        (Hero landing page & feature overview)
+│   │   │   └── Login.jsx       (Farmer mobile/email authentication & secure JWT)
+│   │   ├── components/         # Layout, NotificationCenter, WeatherCard, WeatherAlerts
 │   │   └── i18n/               # en.json & ta.json bilingual translation dictionaries
 │   ├── Dockerfile              # Frontend multi-stage Nginx container
 │   └── package.json
@@ -167,23 +168,26 @@ docker compose up --build
 | `SARVAM_API_KEY` | Backend | Sarvam AI API subscription key for STT, LLM, and TTS | **Yes** (Voice & AI) |
 | `SUPABASE_URL` | Backend | Supabase Project URL (`https://xyz.supabase.co`) | Optional (Graceful fallback) |
 | `SUPABASE_PUBLISHABLE_KEY` | Backend | Supabase Anon / Service Role key | Optional (Graceful fallback) |
-| `GOOGLE_CLIENT_ID` | Backend | Google OAuth 2.0 Client ID for token verification | Optional |
 | `FRONTEND_URL` | Backend | Frontend URL for CORS (default: `http://localhost:5173`) | Optional |
 | `ALLOW_ALL_ORIGINS` | Backend | Enable wildcard CORS (`true`/`false`) | Optional |
 | `VITE_API_URL` | Frontend | Target backend URL (default: `http://localhost:8000`) | **Yes** |
-| `VITE_GOOGLE_CLIENT_ID`| Frontend | Google OAuth Client ID for frontend button | Optional |
 
 ---
 
 ## 🧪 Automated Testing
 
-### 1. AgentFoundry Workflow Test Suite
-Validates multimodal routing, weather integration, Tamil generation, and Supabase offline resilience:
+### 1. Full Backend Automated Test Suite
+Runs all 28 automated unit, workflow, and end-to-end verification tests:
 ```bash
 cd backend
-python -m unittest tests/test_agent_workflow.py
+python -m unittest discover -s tests -p "test_*.py"
 ```
-*Expected: 6/6 tests passing (`OK`).*
+*Expected: 28/28 tests passing (`Ran 28 tests ... OK`).*
+
+Included test suites:
+- `tests/test_api_endpoints.py`: Auth, profiles, schemes, weather, assistant endpoints & SQLite persistence (12 tests)
+- `tests/test_agent_workflow.py`: AgentFoundry 10-node multimodal autonomous copilot loop (6 tests)
+- `tests/test_e2e_verification.py`: Full end-to-end integration and edge-case validation (10 tests)
 
 ### 2. Computer Vision Preprocessing Suite
 Validates 12 edge-case scenarios including EXIF transpositions, blur Laplacian variance, overexposure clipping, low light, and Test-Time Augmentation (TTA):
@@ -193,13 +197,14 @@ python test_model.py
 ```
 *Expected: 12/12 preprocessing scenarios passing (`OK`).*
 
-### 3. Frontend Production Build
-Validates Vite bundler, React 19 components, Tailwind CSS v4, and i18n dictionaries:
+### 3. Frontend Linting & Production Build
+Validates Oxlint rules, Vite bundler, React 19 components, Tailwind CSS v4, and i18n dictionaries:
 ```bash
 cd frontend
+npm run lint
 npm run build
 ```
-*Expected: Clean build into `frontend/dist`.*
+*Expected: 0 errors across all 24 frontend files, clean production build in `frontend/dist`.*
 
 ---
 
@@ -211,11 +216,16 @@ npm run build
 | `POST` | `/api/agent/chat` | Fast JSON copilot chat with contextual grounding and weather evaluation. |
 | `GET` | `/api/agent/workflow`| Returns AgentFoundry workflow manifest and active node status. |
 | `POST` | `/api/crops/analyze` | Direct EfficientNetV2 inference on uploaded plant leaf. |
-| `GET` | `/api/crops/history` | Retrieves historical analysis records from Supabase. |
+| `GET` | `/api/crops/history` | Retrieves historical analysis records with confidence and risk classification. |
+| `DELETE`| `/api/crops/history/{id}` | Deletes an analysis record from SQLite / Supabase database. |
 | `GET` | `/api/weather/forecast`| Returns 24h hourly and 7-day agricultural forecasts with spray alerts. |
-| `POST` | `/api/assistant/chat` | Conversational text chat with agricultural guidance. |
+| `POST` | `/api/assistant/chat` | Conversational text chat with agronomic advice and conversation persistence. |
+| `GET` | `/api/assistant/history` | Retrieves farmer chat consultation audit log. |
+| `DELETE`| `/api/assistant/history` | Clears conversation history from database. |
 | `POST` | `/api/assistant/voice`| Spoken voice chat: STT $\rightarrow$ Grounded Reasoning $\rightarrow$ TTS. |
-| `POST` | `/api/google-auth/login`| Verifies Google OAuth credential tokens securely. |
+| `GET` | `/api/schemes` | Central & State agricultural subsidy directory with bilingual search. |
+| `GET` | `/api/profile` | Fetches farmer profile details and notification alert preferences. |
+| `PUT` | `/api/profile` | Updates farmer profile details and notification toggle settings. |
 | `GET` | `/health` | Service health status check. |
 
 ---
@@ -223,9 +233,10 @@ npm run build
 ## 🛡️ Responsible AI, Safety & Grounding Principles
 
 1. **Prediction $\neq$ Diagnosis**: AI visual models detect probabilistic visual patterns. If model confidence is `<60%`, AgroNex marks the status as **Uncertain** and explicitly advises the farmer to consult a local **Krishi Vigyan Kendra (KVK)** or agricultural officer before committing financial resources.
-2. **Weather-Grounded Spray Window**: AgroNex checks live rainfall and wind velocity before confirming spray advice. If rain is forecast ($>60\%$ or $>2\text{ mm}$), the agent strictly advises **against** foliar chemical application.
-3. **No Fabricated Dosages**: The agent prioritizes organic and cultural controls (sanitation, spacing, neem oil, bio-fungicides) and refuses to fabricate unverified proprietary chemical dosages.
-4. **Bilingual Inclusion**: First-class support for Tamil (`ta-IN`) and English ensures smallholder farmers across South India can query the assistant naturally using voice or text.
+2. **Weather-Grounded Spray Window**: AgroNex checks live rainfall and wind velocity before confirming spray advice. If rain is forecast ($>60\%$ or $>2\text{ mm}$) or wind exceeds $25\text{ km/h}$, the agent strictly advises **against** foliar chemical application.
+3. **Statutory & Extension Precedence**: Automated advisory models and thresholds are advisory aids. **Registered pesticide product label instructions, statutory regulations, and official local extension/KVK authority supersede all automated thresholds.**
+4. **No Fabricated Dosages**: The agent prioritizes organic and cultural controls (sanitation, spacing, neem oil, bio-fungicides) and refuses to fabricate unverified proprietary chemical dosages.
+5. **Bilingual Inclusion**: First-class support for Tamil (`ta-IN`) and English ensures smallholder farmers across South India can query the assistant naturally using voice or text.
 
 ---
 

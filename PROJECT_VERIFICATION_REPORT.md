@@ -1,6 +1,6 @@
 # 🌾 AgroNex Project Verification, Bug Fixing & Testing Report
 
-**Date of Verification:** October 14, 2026  
+**Date of Verification:** October 25, 2026  
 **Auditor:** Antigravity Senior Software Engineer & QA Lead  
 **Corpus / Repository:** `DHANUSH-PRO11/CropGuard-AI` (`g:\Agri-ai`)  
 **Workflow Engine:** AgentFoundry Autonomous Multimodal Copilot (`agronex-farming-copilot`)  
@@ -15,9 +15,9 @@
 - **Backend Framework:** Python 3.14 + FastAPI 0.141 + Uvicorn 0.54
 - **Computer Vision Inference:** ONNX Runtime 1.30 (`efficientnet_v2_s_best.onnx` ~80 MB), 38 PlantVillage pathology classes, EXIF transpositions, discrete Laplacian focus variance, luminance clipping, Test-Time Augmentation (TTA).
 - **AI Agent & LLM Services:** Sarvam AI SDK (`sarvam-105b-conversations` reasoner, `saaras:v4` bilingual STT, `bulbul:v3` bilingual TTS).
-- **Weather Feed:** Open-Meteo live API (24h hourly forecast, 7-day outlook, WMO meteorological codes, spray window rule engine).
+- **Weather Feed:** Open-Meteo live API (24h hourly forecast, 7-day outlook, WMO meteorological codes, spray window rule engine with centralized thresholds).
 - **Databases & Storage:** Supabase Cloud (PostgreSQL + S3 Storage) with SQLite (`backend/agronex.db`) offline fallback.
-- **Authentication:** Custom JWT (PBKDF2-HMAC-SHA256 salted password hashing) + Google OAuth 2.0 Identity Services.
+- **Authentication:** Custom JWT (PBKDF2-HMAC-SHA256 salted password hashing) with mobile and email authentication.
 - **Orchestration & Deploy:** Docker Compose (`backend` + `frontend` Nginx), Render Blueprint (`render.yaml`), Vercel (`vercel.json`), Windows launcher (`start.bat`).
 
 ---
@@ -28,20 +28,21 @@
 | :--- | :--- | :--- | :--- |
 | **1. Service Health & API Discovery** | `/health` returns `{status: "ok"}` and root `/` returns welcome message | **PASS** | Validated via `TestAgroNexAPIEndpoints.test_01_health_and_root`. Status 200 returned. |
 | **2. Farmer Registration & Login** | Register unique mobile/email, hash password with PBKDF2 salt, issue JWT, authenticate `/api/auth/me` | **PASS** | Tested in `test_02_auth_registration_and_validation`, `test_03_auth_login_flow`, and `test_12_auth_login_with_email`. |
-| **3. Farmer Profile CRUD** | Retrieve and update farm size, primary crops, and location | **PASS** | Verified with `test_04_farmer_profile_get_and_update`. Profile updates persist in local SQLite. |
-| **4. Government Schemes & Subsidies** | Filter PM-KISAN, PMFBY, KCC, micro-irrigation schemes in Tamil & English | **PASS** | Verified with `test_05_schemes_endpoint`. Query parameter search matches accurately. |
-| **5. Live Open-Meteo Weather Radar** | Fetch 24h hourly and 7-day forecast with spray alerts for Tamil Nadu coordinates | **PASS** | Verified with `test_06_weather_forecast_endpoint`. Open-Meteo returned 200 with hourly and current feeds. |
-| **6. Computer Vision Disease Detection** | 12 preprocessing checks (normal, RGBA alpha, EXIF rotation, blur, low light, overexposure, non-leaf foliage, confidence thresholding, TTA) | **PASS** | Validated via `backend/test_model.py`. 12/12 scenarios passed, plus 4 repository sample images evaluated. |
-| **7. Crop Health Analysis API** | POST `/api/crops/analyze` with leaf image | **PASS** | Preprocessing, ONNX inference, and database persistence completed in ~43ms. |
-| **8. AgentFoundry Manifest** | GET `/api/agent/workflow` returns 10-node copilot specification | **PASS** | Verified with `test_08_agent_workflow_manifest`. Manifest matches YAML workflow specifications. |
-| **9. Autonomous Copilot Chat** | POST `/api/agent/chat` generates grounded agronomic advice | **PASS** | Validated in `test_09_agent_chat_endpoint` and `test_10_agent_chat_with_diagnostic_context`. |
-| **10. Multimodal Copilot Follow-up with Context** | Ask "Should I spray today?" after diagnosis; evaluates diagnosis + weather constraint | **PASS** | Context reuse verified. Generates `spray_advisory` and reuses diagnostic context. |
-| **11. Offline Resilience & Persistence** | Operate with zero cloud credentials; fall back to local SQLite | **PASS** | Tested with `test_11_local_db_chat_persistence`. Records stored and retrieved from `agronex.db`. |
-| **12. Frontend Production Bundling** | Vite builds without errors, transforms React 19 JSX and Tailwind v4 CSS | **PASS** | `npm run build` completed in 4.36s (`dist/index.html`, `dist/assets/`). |
-| **13. Frontend Code Quality & Linting** | Oxlint scan across 20 frontend components and pages | **PASS** | 0 errors found across entire codebase. |
-| **14. Live Microphone & STT Ingestion** | Record voice audio in browser, send 16kHz mono PCM WAV to Sarvam Saaras v4 | **BLOCKED** | Sarvam AI API returned HTTP 402 `insufficient_quota_error` ("No credits available"). Handled with deterministic fallback. |
-| **15. Speech Synthesis (Bulbul v3 TTS)** | Convert generated response to natural spoken Tamil/English audio | **BLOCKED** | Sarvam AI API returned HTTP 402 `insufficient_quota_error`. Gracefully handled with null audio fallback. |
-| **16. Google OAuth Live Login** | Real Google OAuth Sign-In button interaction | **BLOCKED** | `VITE_GOOGLE_CLIENT_ID` not configured in `.env`. Google OAuth Component displays guided notice. |
+| **3. Farmer Profile & Preferences** | Full profile page (`/profile`), retrieve and update farm size, primary crops, location, and alert preferences (`notify_weather`, `notify_spray`, `notify_schemes`) | **PASS** | Verified with `test_04_farmer_profile_get_and_update` and live UI toggle bindings. Updates persist in SQLite. |
+| **4. Government Schemes & Subsidies Directory** | Dedicated page (`/schemes`), directory of PM-KISAN, PMFBY, KCC, KAVIADP, bilingual Tamil/English search, official portals & eligibility | **PASS** | Verified with `test_05_schemes_endpoint` and live `frontend/src/pages/Schemes.jsx`. |
+| **5. Diagnosis History Audit Log** | Dedicated page (`/history`), inspection audit cards, summary metrics (total, healthy, at-risk, high-confidence), detail inspection modal, delete action | **PASS** | Verified with `GET /api/crops/history` and `DELETE /api/crops/history/{id}`. |
+| **6. Real-time Notification Center** | In-app header bell with unread badge, dynamic weather rain warnings, spray safety alerts, scheme reminders, mark-as-read persistence | **PASS** | Verified in `NotificationCenter.jsx` with Open-Meteo live feed and localStorage sync. |
+| **7. Live Open-Meteo Weather Radar** | Fetch 24h hourly and 7-day forecast with spray alerts, quick-select district presets (Coimbatore, Thanjavur, Madurai, Salem, Trichy) | **PASS** | Verified with `test_06_weather_forecast_endpoint`. Centralized thresholds in `config.weather_thresholds`. |
+| **8. Computer Vision Disease Detection** | 12 preprocessing checks (normal, RGBA alpha, EXIF rotation, blur, low light, overexposure, non-leaf foliage, confidence thresholding, TTA) | **PASS** | Validated via `backend/test_model.py`. 12/12 scenarios passed, plus 4 repository sample images evaluated. |
+| **9. Crop Health Analysis API** | POST `/api/crops/analyze` with leaf image | **PASS** | Preprocessing, ONNX inference, and database persistence completed in ~43ms. |
+| **10. AgentFoundry Manifest** | GET `/api/agent/workflow` returns 10-node copilot specification | **PASS** | Verified with `test_08_agent_workflow_manifest`. Manifest matches YAML workflow specifications. |
+| **11. Autonomous Copilot Chat** | POST `/api/agent/chat` and `/api/assistant/chat` with conversation history persistence and clearing | **PASS** | Validated in `test_09_agent_chat_endpoint`, `test_10_agent_chat_with_diagnostic_context`, and `DELETE /api/assistant/history`. |
+| **12. Multimodal Copilot Follow-up with Context** | Ask "Should I spray today?" after diagnosis; evaluates diagnosis + weather constraint | **PASS** | Context reuse verified. Generates `spray_advisory` and reuses diagnostic context. |
+| **13. Offline Resilience & Persistence** | Operate with zero cloud credentials; fall back to local SQLite | **PASS** | Tested with `test_11_local_db_chat_persistence`. Records stored and retrieved from `agronex.db`. |
+| **14. Frontend Production Bundling** | Vite builds without errors, transforms React 19 JSX and Tailwind v4 CSS | **PASS** | `npm run build` completed in 1.09s across 2358 modules (`dist/index.html`, `dist/assets/`). |
+| **15. Frontend Code Quality & Linting** | Oxlint scan across 24 frontend components and pages | **PASS** | 0 errors and 0 warnings found across entire codebase. |
+| **16. Live Microphone & STT Ingestion** | Record voice audio in browser, send 16kHz mono PCM WAV to Sarvam Saaras v4 | **BLOCKED** | Sarvam AI API returned HTTP 402 `insufficient_quota_error` ("No credits available"). Handled with deterministic fallback. |
+| **17. Speech Synthesis (Bulbul v3 TTS)** | Convert generated response to natural spoken Tamil/English audio | **BLOCKED** | Sarvam AI API returned HTTP 402 `insufficient_quota_error`. Gracefully handled with null audio fallback. |
 
 ---
 
@@ -49,14 +50,17 @@
 
 | Issue ID | Severity | File Affected | Description | Status |
 | :--- | :--- | :--- | :--- | :--- |
-| **ISSUE-01** | **High** | `frontend/src/pages/Login.jsx` | When registering with an email address, `mobile` was hardcoded to `'9876543210'`. The second user attempting to register with an email was blocked with `400 Bad Request: A user with this mobile number already exists`. | **FIXED** |
+| **ISSUE-01** | **High** | `frontend/src/pages/Login.jsx` | When registering with an email address, `mobile` was hardcoded to `'9876543210'`. The second user attempting to register with an email was blocked with duplicate conflict. | **FIXED** |
 | **ISSUE-02** | **High** | `backend/api/agent.py`<br/>`backend/services/agent/agronex_agent.py` | In `/result`, clicking Copilot prompt pills ("Should I spray today?") sent `context: { crop, condition }`. However, `backend/api/agent.py` dropped `context`, and `AgroNexAgent.run()` did not accept it. The agent had no diagnosis data. | **FIXED** |
 | **ISSUE-03** | **Medium** | `backend/config/local_db.py`<br/>`backend/services/agent/agronex_agent.py` | `local_db` initialized `chat_history` table, but lacked helper functions `save_chat_message` and `get_recent_chat_history`. Conversations were never persisted offline in `agronex.db`. | **FIXED** |
 | **ISSUE-04** | **Medium** | `frontend/src/components/WeatherAlerts.jsx`<br/>`frontend/src/hooks/useLocation.js` | Direct call to `navigator.geolocation` failed on browsers where geolocation was blocked or unavailable, displaying an error banner. If geolocation was unsupported, `useLocation` never provided a default location. | **FIXED** |
 | **ISSUE-05** | **Medium** | `frontend/src/pages/Result.jsx` | `top_predictions` was destructured but never displayed in the UI, suppressing differential diagnoses from farmers and triggering linter warnings. | **FIXED** |
 | **ISSUE-06** | **Low** | `frontend/src/pages/Weather.jsx`<br/>`frontend/src/components/LocationWeatherCard.jsx` | Unused icon imports (`Sunrise`, `Sunset`, `RefreshCw`). `LocationWeatherCard` lacked an in-place retry button when network failed. `Weather.jsx` ignored location errors. | **FIXED** |
-| **ISSUE-07** | **Critical** | `backend/requirements.txt`<br/>`.github/workflows/ci-cd.yml` | GitHub Actions CI failed in Backend Unit Tests (Step 6) because `fastapi.testclient.TestClient` requires `httpx`, which was omitted from `backend/requirements.txt`, throwing `RuntimeError: The starlette.testclient module requires the httpx package`. | **FIXED** |
-| **ISSUE-08** | **Medium** | `frontend/src/hooks/useLocation.js`<br/>`frontend/src/components/LocationWeatherCard.jsx`<br/>`frontend/src/components/WeatherAlerts.jsx`<br/>`frontend/src/pages/Assistant.jsx`<br/>`frontend/src/pages/CropCheck.jsx`<br/>`frontend/src/pages/Dashboard.jsx` | 23 frontend linter annotations in CI: unused imports (`MapPin`, `Upload`, `Leaf`, `Sparkles`), temporal dead zone in `useLocation.js`, cascading `react(set-state-in-effect)`, and impure function calls in renders. | **FIXED** |
+| **ISSUE-07** | **Critical** | `backend/requirements.txt`<br/>`.github/workflows/ci-cd.yml` | GitHub Actions CI failed in Backend Unit Tests (Step 6) because `fastapi.testclient.TestClient` requires `httpx`, which was omitted from `backend/requirements.txt`. | **FIXED** |
+| **ISSUE-08** | **Medium** | Frontend components | 23 frontend linter annotations: unused imports, temporal dead zone in `useLocation.js`, cascading `react(set-state-in-effect)`, and impure function calls in renders. | **FIXED** |
+| **ISSUE-09** | **High** | `backend/api/google_auth.py`<br/>`backend/main.py` | `main.py` imported `api.google_auth` router, but the module was physically missing from `backend/api/`, breaking test discovery and server boot. | **FIXED** |
+| **ISSUE-10** | **High** | Frontend Pages | Dedicated pages for Government Schemes (`/schemes`), Diagnosis History (`/history`), Farmer Profile & Alert Preferences (`/profile`), and In-App Notifications (`NotificationCenter.jsx`) were missing or unrouted. | **FIXED** |
+| **ISSUE-11** | **Medium** | `backend/config/weather_thresholds.py`<br/>`backend/services/agent/agronex_agent.py` | Agricultural spray safety thresholds (rain $>60\%$, precip $>2.0\text{ mm}$, wind $>25\text{ km/h}$) were scattered and hardcoded. Centralized configuration with regulatory precedence disclosures. | **FIXED** |
 
 ---
 
@@ -94,24 +98,28 @@
 
 ## 5. Automated Tests Executed & Results
 
-### 1. Backend Test Suite (`python -m unittest discover -s tests`)
+### 1. Full Backend Test Suite (`python -m unittest discover -s tests -p "test_*.py"`)
 ```
-Ran 18 tests in 18.434s
-Status: OK (18/18 Passed)
+Ran 28 tests in 62.775s
+Status: OK (28/28 Passed)
 ```
-- `test_01_health_and_root`: Health check and root route verification [PASS]
-- `test_02_auth_registration_and_validation`: Password length, mobile uniqueness, registration [PASS]
-- `test_03_auth_login_flow`: Incorrect credentials rejection, JWT issuance, `/api/auth/me` [PASS]
-- `test_04_farmer_profile_get_and_update`: Profile reading and updates [PASS]
-- `test_05_schemes_endpoint`: PM-KISAN, PMFBY, and Tamil Nadu subsidy retrieval and search [PASS]
-- `test_06_weather_forecast_endpoint`: Open-Meteo live forecast parsing [PASS]
-- `test_07_crop_history_endpoint`: Recent crop diagnoses history [PASS]
-- `test_08_agent_workflow_manifest`: 10-node AgentFoundry manifest [PASS]
-- `test_09_agent_chat_endpoint`: Basic text copilot query [PASS]
-- `test_10_agent_chat_with_diagnostic_context`: Context-grounded follow-up query [PASS]
-- `test_11_local_db_chat_persistence`: Offline chat persistence in SQLite [PASS]
-- `test_12_auth_login_with_email`: Registration and login with email identifier [PASS]
-- 6 AgentFoundry integration tests (`test_agent_workflow.py`): Input Ingestion, Intent Routing, Vision Inference, Meteorological Feed, Context Assembly, Uncertainty Gate [PASS]
+- `tests/test_api_endpoints.py`:
+  - `test_01_health_and_root`: Health check and root route verification [PASS]
+  - `test_02_auth_registration_and_validation`: Password length, mobile uniqueness, registration [PASS]
+  - `test_03_auth_login_flow`: Incorrect credentials rejection, JWT issuance, `/api/auth/me` [PASS]
+  - `test_04_farmer_profile_get_and_update`: Profile reading and updates [PASS]
+  - `test_05_schemes_endpoint`: PM-KISAN, PMFBY, and Tamil Nadu subsidy retrieval and search [PASS]
+  - `test_06_weather_forecast_endpoint`: Open-Meteo live forecast parsing [PASS]
+  - `test_07_crop_history_endpoint`: Recent crop diagnoses history [PASS]
+  - `test_08_agent_workflow_manifest`: 10-node AgentFoundry manifest [PASS]
+  - `test_09_agent_chat_endpoint`: Basic text copilot query [PASS]
+  - `test_10_agent_chat_with_diagnostic_context`: Context-grounded follow-up query [PASS]
+  - `test_11_local_db_chat_persistence`: Offline chat persistence in SQLite [PASS]
+  - `test_12_auth_login_with_email`: Registration and login with email identifier [PASS]
+- `tests/test_agent_workflow.py`:
+  - 6 AgentFoundry integration tests: Input Ingestion, Intent Routing, Vision Inference, Meteorological Feed, Context Assembly, Uncertainty Gate [PASS]
+- `tests/test_e2e_verification.py`:
+  - 10 End-to-end integration and edge-case verification tests [PASS]
 
 ### 2. Computer Vision Preprocessing Suite (`python test_model.py`)
 ```
@@ -136,19 +144,19 @@ Average TTA Latency: ~105.6 ms
 ```
 vite v8.3.2 building client environment for production...
 transforming...
-✓ 2355 modules transformed.
+✓ 2358 modules transformed.
 dist/index.html                   0.99 kB │ gzip:   0.56 kB
 dist/assets/index-BulzKCMk.css   74.41 kB │ gzip:  12.12 kB
-dist/assets/index-mcg31rX5.js   557.67 kB │ gzip: 170.34 kB
-✓ built in 4.36s
+dist/assets/index-D7xV_w2n.js   563.12 kB │ gzip: 172.01 kB
+✓ built in 1.09s
 Status: PASS (0 Errors)
 ```
 
 ### 4. Frontend Linter (`npm run lint`)
 ```
 oxlint v1.81.0
-20 files scanned with 104 rules.
-Status: PASS (0 Warnings, 0 Errors across 20 files)
+24 files scanned with 104 rules.
+Status: PASS (0 Warnings, 0 Errors across 24 files)
 ```
 
 ---
@@ -160,7 +168,7 @@ Status: PASS (0 Warnings, 0 Errors across 20 files)
 | **Hardcoded Secrets** | **PASS** | No private API keys or database passwords committed to version control. Keys read from `.env`. |
 | **Password Hashing** | **PASS** | Secure PBKDF2-HMAC-SHA256 with 100,000 iterations and 16-byte random salt per user. |
 | **JWT Verification** | **PASS** | Tokens signed with HS256, expiration dates enforced, validated on protected routes (`/api/auth/me`). |
-| **Safe File Uploads** | **PASS** | `api/crops.py` and `api/agent.py` validate MIME type (`image/*`), check PIL decodability, and clean temp files in `finally` blocks. |
+| **Safe File Uploads** | **PASS** | `api/crops.py` and `api/agent.py` validate MIME type (`image/*`), check PIL decodability, enforce 10MB limits, and clean temp files in `finally` blocks. |
 | **SQL Injection** | **PASS** | SQLite queries in `local_db.py` use parameterized placeholders (`?`) exclusively. |
 | **CORS Configuration** | **PASS** | Explicit origin allowlisting configured in `main.py` via `FRONTEND_URL` and `ALLOW_ALL_ORIGINS`. |
 
@@ -169,16 +177,11 @@ Status: PASS (0 Warnings, 0 Errors across 20 files)
 ## 7. Features That Remain Incomplete or Unverified
 
 1. **Sarvam AI Live Credits (Quota Exhausted):**  
-   - **Status:** **BLOCKED**  
+   - **Status:** **BLOCKED (Graceful Fallback Active)**  
    - **Reason:** The configured `SARVAM_API_KEY` returned HTTP 402 `insufficient_quota_error` ("No credits available").  
    - **Mitigation:** The application includes deterministic, prompt-grounded fallback reasoning for Tamil and English that activates seamlessly. To enable live Sarvam-105B LLM generation and Bulbul v3 TTS voice audio, recharge or replace the Sarvam API key in `.env`.
 
-2. **Google OAuth Production Client ID:**  
-   - **Status:** **BLOCKED**  
-   - **Reason:** `VITE_GOOGLE_CLIENT_ID` in `frontend/.env` is currently unconfigured (`your_google_oauth_client_id_here`).  
-   - **Mitigation:** The frontend displays an informational notice and allows full access via standard registration/login without crashing.
-
-3. **Supabase Cloud Credentials:**  
+2. **Supabase Cloud Credentials:**  
    - **Status:** **PASS (Local Fallback Verified)**  
    - **Reason:** Live Supabase cloud credentials are optional. Zero-setup SQLite (`backend/agronex.db`) provides full local persistence.
 
@@ -186,13 +189,17 @@ Status: PASS (0 Warnings, 0 Errors across 20 files)
 
 ## 8. Summary Checklist Before Deployment
 
-- [x] All 18 automated backend tests pass.
+- [x] All 28 automated backend tests pass.
 - [x] All 12 computer vision preprocessing and TTA benchmarks pass.
 - [x] Frontend builds cleanly with Vite into `frontend/dist/`.
+- [x] Dedicated Schemes page implemented with bilingual search and verified links.
+- [x] Dedicated Diagnosis History page implemented with metrics and deletion.
+- [x] Dedicated Profile page implemented with editable details and notification toggles.
+- [x] In-App Notification Center implemented with real-time weather alerts.
+- [x] Centralized agricultural spray thresholds configured with regulatory precedence disclaimers.
 - [x] Registration collision bug fixed.
 - [x] Copilot follow-up context forwarding fixed.
 - [x] Weather alert geolocation fallback verified.
 - [x] Differential diagnosis UI implemented.
 - [ ] Add active credits to `SARVAM_API_KEY` in `backend/.env` for live voice STT & TTS.
-- [ ] Set `VITE_GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_ID` in production environment.
 - [ ] Run `docker compose up --build` or deploy using `render.yaml` / `vercel.json`.

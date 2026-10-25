@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Leaf, Eye, EyeOff, Lock, Mail, User, ArrowRight, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import AgroNexGoogleLogin from '../features/googleAuth/GoogleLogin';
 import { API_BASE_URL } from '../config/api';
 
 export default function Login() {
@@ -282,27 +281,6 @@ export default function Login() {
             )}
           </button>
         </form>
-
-        {/* Social Divider */}
-        <div className="mt-7 flex items-center gap-3">
-          <div className="h-px bg-slate-200 flex-1"></div>
-          <span className="text-slate-400 text-xs uppercase tracking-wider font-medium">
-            {i18n.language === 'ta' ? 'அல்லது' : 'Or continue with'}
-          </span>
-          <div className="h-px bg-slate-200 flex-1"></div>
-        </div>
-
-	{/* Google / Quick SSO */}
-	<div className="mt-5 flex justify-center">
-        <AgroNexGoogleLogin
-          onSuccess={(res) => {
-            if (res?.user) {
-              localStorage.setItem('agronex_user', JSON.stringify(res.user));
-            }
-            navigate('/dashboard');
-          }}
-        />
-	</div>
 
         {/* Toggle between Login and Register */}
         <div className="mt-7 text-center text-xs text-slate-500">

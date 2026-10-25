@@ -838,9 +838,44 @@ export default function Assistant() {
           </div>
         </div>
 
-        <div className="text-xs text-green-200 font-medium bg-black/20 px-3 py-1.5 rounded-full border border-white/10">
-          {i18n.language === 'ta' ? 'தமிழ் / English' : 'English / தமிழ்'}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              const confirmMsg = i18n.language === 'ta' ? 'உரையாடல் வரலாற்றை அழிக்க விரும்புகிறீர்களா?' : 'Clear all conversation history?';
+              if (!window.confirm(confirmMsg)) return;
+              try {
+                await fetch(`${apiUrl}/api/assistant/history`, { method: 'DELETE' });
+                setMessages([{
+                  id: Date.now(),
+                  type: 'ai',
+                  text: i18n.language === 'ta'
+                    ? 'வணக்கம்! நான் அக்ரோநெக்ஸ் AI. உங்களின் புதிய கேள்விகளுக்கு உதவ தயாராக உள்ளேன்.'
+                    : "Hello! I'm AgroNex AI. Ready to answer your agricultural questions."
+                }]);
+              } catch (e) {
+                console.warn('Clear history failed:', e);
+              }
+            }}
+            className="text-xs text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-xl border border-white/10 transition-colors cursor-pointer"
+            title="Clear Chat History"
+          >
+            <Trash2 size={16} />
+          </button>
+          <div className="text-xs text-green-200 font-medium bg-black/20 px-3 py-1.5 rounded-full border border-white/10">
+            {i18n.language === 'ta' ? 'தமிழ் / English' : 'English / தமிழ்'}
+          </div>
         </div>
+      </div>
+
+      {/* Service Status Sub-bar */}
+      <div className="bg-emerald-950/80 border-b border-emerald-900/60 px-4 py-1.5 text-[11px] text-emerald-200 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span className="font-semibold">{i18n.language === 'ta' ? 'வேளாண் சிந்தனை எஞ்சின்: நேரலை' : 'Agronomic Reasoner: Online'}</span>
+        </div>
+        <span className="opacity-80 text-[10px] hidden sm:inline">
+          {i18n.language === 'ta' ? 'வானிலை & பயிர் விதிமுறைகளுடன் இணைக்கப்பட்டுள்ளது' : 'Grounded in meteorological rules & crop pathology'}
+        </span>
       </div>
 
       {/* Error banner */}

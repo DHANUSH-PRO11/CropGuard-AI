@@ -107,9 +107,11 @@ def get_crop_history(db: Optional[Client] = Depends(get_supabase)):
     records = []
     if db is not None:
         try:
-            res = db.table("crop_analyses").select("*").order("created_at", desc=True).limit(20).execute()
+            res = db.table("crop_analyses").select("*").order("created_at", desc=True).limit(50).execute()
             for row in res.data or []:
                 records.append({
+                    "id": str(row.get("id")) if row.get("id") else None,
+                    "created_at": row.get("created_at"),
                     "crop": row.get("crop_type", "Unknown"),
                     "condition": row.get("detected_disease", "Unknown"),
                     "confidence": float(row.get("confidence", 0.0)),
@@ -132,9 +134,11 @@ def get_crop_history(db: Optional[Client] = Depends(get_supabase)):
 
     # Fallback to local DB history
     try:
-        local_records = local_db.get_recent_crop_analyses(limit=20)
+        local_records = local_db.get_recent_crop_analyses(limit=50)
         for row in local_records:
             records.append({
+                "id": str(row.get("id")) if row.get("id") else None,
+                "created_at": row.get("created_at"),
                 "crop": row.get("crop_type", "Unknown"),
                 "condition": row.get("detected_disease", "Unknown"),
                 "confidence": float(row.get("confidence", 0.0)),
@@ -154,6 +158,23 @@ def get_crop_history(db: Optional[Client] = Depends(get_supabase)):
         logger.warning(f"Failed to fetch local crop history: {e}")
 
     return records
+
+@router.delete("/history/{record_id}")
+def delete_crop_history_record(record_id: str, db: Optional[Client] = Depends(get_supabase)):
+    """Deletes a specific crop diagnosis history record."""
+    deleted = False
+    if db is not None:
+        try:
+            db.table("crop_analyses").delete().eq("id", record_id).execute()
+            deleted = True
+        except Exception as e:
+            logger.warning(f"Failed to delete record from Supabase: {e}")
+    
+    local_deleted = local_db.delete_crop_analysis(record_id)
+    if not deleted and not local_deleted:
+        raise HTTPException(status_code=404, detail="Analysis record not found.")
+    return {"success": True, "message": "Record deleted successfully"}
+
 
 
 

@@ -14,3 +14,9 @@ HUMIDITY_HIGH = 85  # Percent
 # WMO Weather codes mapping for thunderstorm
 THUNDERSTORM_CODES = [95, 96, 97, 99]
 HAIL_CODES = [96, 99]
+
+# Configured Spray Operation Thresholds
+SPRAY_RAIN_PROB_THRESHOLD = 60  # Percent
+SPRAY_PRECIP_THRESHOLD_MM = 2.0  # mm
+SPRAY_WIND_SPEED_THRESHOLD_KMH = 25  # km/h
+
