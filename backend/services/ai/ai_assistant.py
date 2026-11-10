@@ -232,7 +232,7 @@ class AIAssistant:
 
         payload = {
             "text": clean_text,
-            "voice": "Nalini",
+            "voice": "Lakshmi",
             "model": "timbre-v3.0",
             "language": tts_lang,
             "speed": 1.0,
