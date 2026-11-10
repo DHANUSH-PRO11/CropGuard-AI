@@ -57,7 +57,12 @@ export default function Login() {
         body: JSON.stringify(payload)
       });
 
-      const data = await response.json();
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (err) {
+        data = { detail: response.statusText || 'Server error occurred during authentication.' };
+      }
 
       if (!response.ok) {
         throw new Error(data.detail || 'Authentication failed. Please check your credentials.');
@@ -65,18 +70,22 @@ export default function Login() {
 
       if (isRegister) {
         // Auto-login after successful registration
-        const loginRes = await fetch(`${API_BASE_URL}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: cleanMobile,
-            password: formData.password
-          })
-        });
-        const loginData = await loginRes.json();
-        if (loginData.access_token) {
-          localStorage.setItem('agronex_token', loginData.access_token);
-          localStorage.setItem('agronex_user', JSON.stringify(loginData.user || data));
+        try {
+          const loginRes = await fetch(`${API_BASE_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: cleanMobile,
+              password: formData.password
+            })
+          });
+          const loginData = await loginRes.json();
+          if (loginData.access_token) {
+            localStorage.setItem('agronex_token', loginData.access_token);
+            localStorage.setItem('agronex_user', JSON.stringify(loginData.user || data));
+          }
+        } catch (loginErr) {
+          console.warn('Auto-login notice:', loginErr);
         }
       } else {
         if (data.access_token) {

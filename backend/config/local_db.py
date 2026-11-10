@@ -11,9 +11,24 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 
-DB_PATH = Path(__file__).resolve().parent.parent / "agronex.db"
+def _resolve_db_path() -> Path:
+    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return Path("/tmp/agronex.db")
+    base_dir = Path(__file__).resolve().parent.parent
+    try:
+        # Check if local directory is writable
+        test_file = base_dir / ".test_write"
+        test_file.touch()
+        test_file.unlink()
+        return base_dir / "agronex.db"
+    except Exception:
+        return Path("/tmp/agronex.db")
+
+DB_PATH = _resolve_db_path()
 
 def get_connection() -> sqlite3.Connection:
+    global DB_PATH
+    DB_PATH = _resolve_db_path()
     conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn

@@ -1,9 +1,17 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from api import crops, assistant, profile, auth, weather, schemes
 from api.agent import router as agent_router
 import os
 app = FastAPI(title="AgroNex API", description="Smart Farming Backend with Autonomous Copilot Agent", version="1.0.0")
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Server error: {str(exc)}"}
+    )
 
 # Determine allowed origins based on environment variable
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
