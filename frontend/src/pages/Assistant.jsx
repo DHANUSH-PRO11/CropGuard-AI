@@ -80,6 +80,8 @@ export default function Assistant() {
   // References
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const pcmBuffersRef = useRef([]);
+  const workletNodeRef = useRef(null);
   const isRecordingRef = useRef(false);
   const timerIntervalRef = useRef(null);
   const recordingStartTimeRef = useRef(null);
@@ -126,6 +128,10 @@ export default function Assistant() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try { mediaRecorderRef.current.stop(); } catch {}
       mediaRecorderRef.current = null;
+    }
+    if (workletNodeRef.current) {
+      try { workletNodeRef.current.disconnect(); } catch {}
+      workletNodeRef.current = null;
     }
     if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
       audioCtxRef.current.close().catch(() => {});
@@ -253,8 +259,89 @@ export default function Assistant() {
     setCapturedPhoto(null);
   };
 
-  // Helper to generate finalized audio object from MediaRecorder
+  // Helper: Encode raw Float32 audio samples into standard 16kHz mono 16-bit PCM WAV Blob
+  const encodeWavBlob = (buffers, inputSampleRate = 48000) => {
+    if (!buffers || buffers.length === 0) return null;
+
+    let totalLength = 0;
+    for (let i = 0; i < buffers.length; i++) {
+      totalLength += buffers[i].length;
+    }
+    if (totalLength === 0) return null;
+
+    const merged = new Float32Array(totalLength);
+    let offset = 0;
+    for (let i = 0; i < buffers.length; i++) {
+      merged.set(buffers[i], offset);
+      offset += buffers[i].length;
+    }
+
+    const targetSampleRate = 16000;
+    let resampled;
+    if (inputSampleRate === targetSampleRate) {
+      resampled = merged;
+    } else {
+      const ratio = inputSampleRate / targetSampleRate;
+      const newLen = Math.round(merged.length / ratio);
+      resampled = new Float32Array(newLen);
+      let offsetResult = 0;
+      let offsetBuffer = 0;
+      while (offsetResult < resampled.length) {
+        const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
+        let accum = 0;
+        let count = 0;
+        for (let i = offsetBuffer; i < nextOffsetBuffer && i < merged.length; i++) {
+          accum += merged[i];
+          count++;
+        }
+        resampled[offsetResult] = count > 0 ? accum / count : 0;
+        offsetResult++;
+        offsetBuffer = nextOffsetBuffer;
+      }
+    }
+
+    const wavBuffer = new ArrayBuffer(44 + resampled.length * 2);
+    const view = new DataView(wavBuffer);
+
+    const writeString = (v, off, str) => {
+      for (let i = 0; i < str.length; i++) v.setUint8(off + i, str.charCodeAt(i));
+    };
+
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + resampled.length * 2, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, targetSampleRate, true);
+    view.setUint32(28, targetSampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(view, 36, 'data');
+    view.setUint32(40, resampled.length * 2, true);
+
+    let pcmOffset = 44;
+    for (let i = 0; i < resampled.length; i++, pcmOffset += 2) {
+      const s = Math.max(-1, Math.min(1, resampled[i]));
+      view.setInt16(pcmOffset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+
+    return new Blob([view], { type: 'audio/wav' });
+  };
+
+  // Helper to generate finalized audio object (prefers pristine 16kHz WAV for Gnani AI compatibility)
   const generateFinalAudio = (durationSecs) => {
+    if (pcmBuffersRef.current && pcmBuffersRef.current.length > 0) {
+      const rate = sampleRateRef.current || audioCtxRef.current?.sampleRate || 48000;
+      const wavBlob = encodeWavBlob(pcmBuffersRef.current, rate);
+      if (wavBlob && wavBlob.size > 44) {
+        const file = new File([wavBlob], `voice_${Date.now()}.wav`, { type: 'audio/wav' });
+        const url = URL.createObjectURL(wavBlob);
+        return { file, blob: wavBlob, url, name: file.name, duration: formatTimer(durationSecs || 1) };
+      }
+    }
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       try { mediaRecorderRef.current.requestData(); } catch {}
     }
@@ -278,6 +365,7 @@ export default function Assistant() {
     setErrorMsg(null);
     setRecordedAudio(null);
     setIsPaused(false);
+    pcmBuffersRef.current = [];
     audioChunksRef.current = [];
 
     // Pre-create AudioContext synchronously on user gesture to guarantee browser permission
@@ -324,6 +412,35 @@ export default function Assistant() {
         analyser.smoothingTimeConstant = 0.5;
         const source = audioCtx.createMediaStreamSource(stream);
         source.connect(analyser);
+
+        // Modern W3C AudioWorklet for clean PCM capture (produces pristine 16kHz WAV for Gnani AI)
+        try {
+          const workletCode = `
+            class PCMRecorderProcessor extends AudioWorkletProcessor {
+              process(inputs) {
+                const input = inputs[0];
+                if (input && input[0]) {
+                  this.port.postMessage(input[0]);
+                }
+                return true;
+              }
+            }
+            registerProcessor('pcm-recorder-processor', PCMRecorderProcessor);
+          `;
+          const blob = new Blob([workletCode], { type: 'application/javascript' });
+          const workletUrl = URL.createObjectURL(blob);
+          await audioCtx.audioWorklet.addModule(workletUrl);
+          const workletNode = new AudioWorkletNode(audioCtx, 'pcm-recorder-processor');
+          workletNode.port.onmessage = (e) => {
+            if (isRecordingRef.current && e.data) {
+              pcmBuffersRef.current.push(new Float32Array(e.data));
+            }
+          };
+          source.connect(workletNode);
+          workletNodeRef.current = workletNode;
+        } catch (workletErr) {
+          console.warn("AudioWorklet setup warning:", workletErr);
+        }
 
         // Dynamic voice wave visualizer with live voice loudness reactivity
         const timeData = new Uint8Array(analyser.fftSize);
@@ -441,6 +558,7 @@ export default function Assistant() {
     if (recordedAudio?.url) {
       URL.revokeObjectURL(recordedAudio.url);
     }
+    pcmBuffersRef.current = [];
     audioChunksRef.current = [];
     setIsRecording(false);
     setIsPaused(false);

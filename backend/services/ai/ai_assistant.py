@@ -48,6 +48,10 @@ class AIAssistant:
                         if val:
                             self.api_key = val
 
+        # Fallback key for serverless Vercel deployment if dashboard env vars are not set
+        if not self.gnani_api_key:
+            self.gnani_api_key = "vach_1ytE2CY5X2EB7Rx1KDRLPVPvNvl19OVWCDOgHImeYU5SSVXaOHx6i3opg0s53mYN5WjUEZ5wfabFGsbJKjOTfYDWReZUIqCC_a78315d638d083ac6d676c5f402d056b"
+
         if self.gnani_api_key:
             logger.info("Gnani AI voice models (Prisma STT & Timbre TTS) active.")
 
