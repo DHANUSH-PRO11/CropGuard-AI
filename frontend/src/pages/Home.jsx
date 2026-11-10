@@ -129,7 +129,7 @@ export default function Home() {
           <p className="text-slate-600 text-sm leading-relaxed">
             {i18n.language === 'ta' 
               ? 'தமிழ் மற்றும் ஆங்கிலத்தில் பேசி பயிர் பராமரிப்பு, உரம் மற்றும் பூச்சி மேலாண்மை ஆலோசனைகளை கேட்கலாம்.' 
-              : 'Powered by Sarvam Saaras STT and Bulbul TTS. Speak naturally in Tamil or English for real-time farm guidance.'}
+              : 'Powered by Gnani AI Prisma STT and Timbre TTS. Speak naturally in your regional language or English for real-time farm guidance.'}
           </p>
           <div className="pt-2 flex items-center gap-1.5 text-xs font-semibold text-teal-700">
             <CheckCircle2 size={14} />

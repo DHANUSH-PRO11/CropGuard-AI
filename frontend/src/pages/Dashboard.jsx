@@ -158,7 +158,7 @@ export default function Dashboard() {
             { 
               icon: <Bot size={20} />, 
               title: t('ai'), 
-              desc: isTamil ? "குரல் உதவியாளர்" : "Sarvam AI Voice", 
+              desc: isTamil ? "குரல் உதவியாளர்" : "Gnani AI Voice", 
               to: "/assistant", 
               iconBg: "bg-blue-100 text-blue-800",
               badge: "Voice",
