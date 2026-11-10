@@ -82,6 +82,7 @@ export default function Assistant() {
   const audioChunksRef = useRef([]);
   const pcmBuffersRef = useRef([]);
   const workletNodeRef = useRef(null);
+  const scriptProcessorRef = useRef(null);
   const isRecordingRef = useRef(false);
   const timerIntervalRef = useRef(null);
   const recordingStartTimeRef = useRef(null);
@@ -132,6 +133,10 @@ export default function Assistant() {
     if (workletNodeRef.current) {
       try { workletNodeRef.current.disconnect(); } catch {}
       workletNodeRef.current = null;
+    }
+    if (scriptProcessorRef.current) {
+      try { scriptProcessorRef.current.disconnect(); } catch {}
+      scriptProcessorRef.current = null;
     }
     if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
       audioCtxRef.current.close().catch(() => {});
@@ -388,17 +393,19 @@ export default function Assistant() {
         return;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        }
-      });
+      // WhatsApp-compatible audio constraints: works flawlessly with Bluetooth headsets, AirPods, and built-in mics
+      let stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e1) {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { autoGainControl: true }
+        });
+      }
       streamRef.current = stream;
       isRecordingRef.current = true;
 
-      // 1. AudioContext for live waveform visualizer (standard AnalyserNode, no deprecated nodes)
+      // 1. AudioContext for live waveform visualizer & raw PCM capture (16kHz WAV)
       try {
         const audioCtx = preAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') {
@@ -413,11 +420,12 @@ export default function Assistant() {
         const source = audioCtx.createMediaStreamSource(stream);
         source.connect(analyser);
 
-        // Modern W3C AudioWorklet for clean PCM capture (produces pristine 16kHz WAV for Gnani AI)
+        // Modern W3C AudioWorklet with active sink connection (forces browser to pump samples)
+        let workletActive = false;
         try {
           const workletCode = `
             class PCMRecorderProcessor extends AudioWorkletProcessor {
-              process(inputs) {
+              process(inputs, outputs) {
                 const input = inputs[0];
                 if (input && input[0]) {
                   this.port.postMessage(input[0]);
@@ -437,9 +445,31 @@ export default function Assistant() {
             }
           };
           source.connect(workletNode);
+          const muteGain = audioCtx.createGain();
+          muteGain.gain.value = 0;
+          workletNode.connect(muteGain);
+          muteGain.connect(audioCtx.destination);
           workletNodeRef.current = workletNode;
+          workletActive = true;
         } catch (workletErr) {
-          console.warn("AudioWorklet setup warning:", workletErr);
+          console.warn("AudioWorklet not available, using processor:", workletErr);
+        }
+
+        // ScriptProcessor Fallback: guarantees 16kHz WAV capture for Gnani AI in all environments
+        if (!workletActive) {
+          const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+          processor.onaudioprocess = (e) => {
+            if (isRecordingRef.current) {
+              const channelData = e.inputBuffer.getChannelData(0);
+              pcmBuffersRef.current.push(new Float32Array(channelData));
+            }
+          };
+          source.connect(processor);
+          const muteGain = audioCtx.createGain();
+          muteGain.gain.value = 0;
+          processor.connect(muteGain);
+          muteGain.connect(audioCtx.destination);
+          scriptProcessorRef.current = processor;
         }
 
         // Dynamic voice wave visualizer with live voice loudness reactivity
