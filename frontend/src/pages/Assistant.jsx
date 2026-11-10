@@ -80,8 +80,6 @@ export default function Assistant() {
   // References
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
-  const pcmBuffersRef = useRef([]);
-  const scriptProcessorRef = useRef(null);
   const isRecordingRef = useRef(false);
   const timerIntervalRef = useRef(null);
   const recordingStartTimeRef = useRef(null);
@@ -114,77 +112,6 @@ export default function Assistant() {
 
 
 
-  // Helper: Encode raw Float32 audio samples into standard 16kHz mono 16-bit PCM WAV Blob
-  const encodeWavBlob = (buffers, inputSampleRate = 48000) => {
-    if (!buffers || buffers.length === 0) return null;
-
-    let totalLength = 0;
-    for (let i = 0; i < buffers.length; i++) {
-      totalLength += buffers[i].length;
-    }
-    if (totalLength === 0) return null;
-
-    const merged = new Float32Array(totalLength);
-    let offset = 0;
-    for (let i = 0; i < buffers.length; i++) {
-      merged.set(buffers[i], offset);
-      offset += buffers[i].length;
-    }
-
-    const targetSampleRate = 16000;
-    let resampled;
-    if (inputSampleRate === targetSampleRate) {
-      resampled = merged;
-    } else {
-      const ratio = inputSampleRate / targetSampleRate;
-      const newLen = Math.round(merged.length / ratio);
-      resampled = new Float32Array(newLen);
-      let offsetResult = 0;
-      let offsetBuffer = 0;
-      while (offsetResult < resampled.length) {
-        const nextOffsetBuffer = Math.round((offsetResult + 1) * ratio);
-        let accum = 0;
-        let count = 0;
-        for (let i = offsetBuffer; i < nextOffsetBuffer && i < merged.length; i++) {
-          accum += merged[i];
-          count++;
-        }
-        resampled[offsetResult] = count > 0 ? accum / count : 0;
-        offsetResult++;
-        offsetBuffer = nextOffsetBuffer;
-      }
-    }
-
-    const wavBuffer = new ArrayBuffer(44 + resampled.length * 2);
-    const view = new DataView(wavBuffer);
-
-    const writeString = (v, off, str) => {
-      for (let i = 0; i < str.length; i++) v.setUint8(off + i, str.charCodeAt(i));
-    };
-
-    writeString(view, 0, 'RIFF');
-    view.setUint32(4, 36 + resampled.length * 2, true);
-    writeString(view, 8, 'WAVE');
-    writeString(view, 12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, 1, true);
-    view.setUint32(24, targetSampleRate, true);
-    view.setUint32(28, targetSampleRate * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    writeString(view, 36, 'data');
-    view.setUint32(40, resampled.length * 2, true);
-
-    let pcmOffset = 44;
-    for (let i = 0; i < resampled.length; i++, pcmOffset += 2) {
-      const s = Math.max(-1, Math.min(1, resampled[i]));
-      view.setInt16(pcmOffset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-    }
-
-    return new Blob([view], { type: 'audio/wav' });
-  };
-
   function cleanupAudioRecording() {
     isRecordingRef.current = false;
     recordingStartTimeRef.current = null;
@@ -199,12 +126,6 @@ export default function Assistant() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try { mediaRecorderRef.current.stop(); } catch {}
       mediaRecorderRef.current = null;
-    }
-    if (scriptProcessorRef.current) {
-      try {
-        scriptProcessorRef.current.disconnect();
-      } catch {}
-      scriptProcessorRef.current = null;
     }
     if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
       audioCtxRef.current.close().catch(() => {});
@@ -332,19 +253,12 @@ export default function Assistant() {
     setCapturedPhoto(null);
   };
 
-  // Helper to generate finalized audio object (prefers pristine 16kHz WAV, falls back to MediaRecorder WebM)
+  // Helper to generate finalized audio object from MediaRecorder
   const generateFinalAudio = (durationSecs) => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       try { mediaRecorderRef.current.requestData(); } catch {}
     }
 
-    const rate = sampleRateRef.current || audioCtxRef.current?.sampleRate || 48000;
-    const wavBlob = encodeWavBlob(pcmBuffersRef.current, rate);
-    if (wavBlob && wavBlob.size > 44) {
-      const file = new File([wavBlob], `voice_${Date.now()}.wav`, { type: 'audio/wav' });
-      const url = URL.createObjectURL(wavBlob);
-      return { file, blob: wavBlob, url, name: file.name, duration: formatTimer(durationSecs || 1) };
-    }
     if (audioChunksRef.current.length > 0) {
       const mime = mediaRecorderRef.current?.mimeType || 'audio/webm';
       const ext = mime.includes('mp4') ? 'mp4' : (mime.includes('ogg') ? 'ogg' : 'webm');
@@ -364,8 +278,21 @@ export default function Assistant() {
     setErrorMsg(null);
     setRecordedAudio(null);
     setIsPaused(false);
-    pcmBuffersRef.current = [];
     audioChunksRef.current = [];
+
+    // Pre-create AudioContext synchronously on user gesture to guarantee browser permission
+    let preAudioCtx = null;
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        preAudioCtx = new AudioContextClass();
+        if (preAudioCtx.state === 'suspended') {
+          preAudioCtx.resume();
+        }
+      }
+    } catch (e) {
+      console.warn("AudioContext init hint:", e);
+    }
 
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -383,56 +310,57 @@ export default function Assistant() {
       streamRef.current = stream;
       isRecordingRef.current = true;
 
-      // 1. AudioContext for raw PCM capture (16kHz WAV) & waveform visualizer
+      // 1. AudioContext for live waveform visualizer (standard AnalyserNode, no deprecated nodes)
       try {
-        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        if (AudioContextClass) {
-          const audioCtx = new AudioContextClass();
-          // Vital: resume audio context so browser streams microphone audio
-          if (audioCtx.state === 'suspended') {
-            await audioCtx.resume();
-          }
-          audioCtxRef.current = audioCtx;
-          sampleRateRef.current = audioCtx.sampleRate;
+        const audioCtx = preAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') {
+          await audioCtx.resume();
+        }
+        audioCtxRef.current = audioCtx;
+        sampleRateRef.current = audioCtx.sampleRate;
 
-          const analyser = audioCtx.createAnalyser();
-          analyser.fftSize = 64;
-          const source = audioCtx.createMediaStreamSource(stream);
-          source.connect(analyser);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.5;
+        const source = audioCtx.createMediaStreamSource(stream);
+        source.connect(analyser);
 
-          // ScriptProcessor for clean PCM recording
-          const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-          processor.onaudioprocess = (e) => {
-            if (isRecordingRef.current) {
-              const channelData = e.inputBuffer.getChannelData(0);
-              pcmBuffersRef.current.push(new Float32Array(channelData));
+        // Dynamic voice wave visualizer with live voice loudness reactivity
+        const timeData = new Uint8Array(analyser.fftSize);
+        let lastWaveUpdate = 0;
+        const updateWave = (timestamp) => {
+          if (!isRecordingRef.current) return;
+          if (timestamp - lastWaveUpdate >= 45) {
+            lastWaveUpdate = timestamp;
+            analyser.getByteTimeDomainData(timeData);
+            let sumSquares = 0;
+            for (let i = 0; i < timeData.length; i++) {
+              const norm = (timeData[i] - 128) / 128;
+              sumSquares += norm * norm;
             }
-          };
-          source.connect(processor);
-          processor.connect(audioCtx.destination);
-          scriptProcessorRef.current = processor;
+            const rms = Math.sqrt(sumSquares / timeData.length);
+            const volume = Math.min(1.0, rms * 5.0);
 
-          const dataArray = new Uint8Array(analyser.frequencyBinCount);
-          const updateWave = () => {
-            if (!isRecordingRef.current) return;
-            analyser.getByteFrequencyData(dataArray);
-            const bars = [];
             const barCount = 32;
+            const bars = [];
+            const nowTime = Date.now() / 160;
             for (let i = 0; i < barCount; i++) {
-              const val = dataArray[i % dataArray.length] || 0;
-              const barH = Math.max(4, Math.min(24, Math.round((val / 255) * 24)));
+              const envelope = Math.sin((i / (barCount - 1)) * Math.PI);
+              const idleRipple = Math.sin(nowTime + i * 0.4) * 1.5 + 4;
+              const voiceHeight = volume * 20 * (0.35 + 0.65 * envelope);
+              const barH = Math.max(4, Math.min(26, Math.round(idleRipple + voiceHeight)));
               bars.push(barH);
             }
             setWaveBars(bars);
-            animFrameRef.current = requestAnimationFrame(updateWave);
-          };
+          }
           animFrameRef.current = requestAnimationFrame(updateWave);
-        }
+        };
+        animFrameRef.current = requestAnimationFrame(updateWave);
       } catch (audioErr) {
-        console.warn("AudioContext init warning:", audioErr);
+        console.warn("AudioContext setup warning:", audioErr);
       }
 
-      // 2. MediaRecorder as secondary fallback
+      // 2. MediaRecorder for clean, standard audio recording
       let mimeType = 'audio/webm';
       if (typeof MediaRecorder !== 'undefined') {
         const types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
@@ -484,8 +412,12 @@ export default function Assistant() {
     }
   };
 
-  const pauseRecording = () => {
+  const pauseRecording = async () => {
     isRecordingRef.current = false;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try { mediaRecorderRef.current.requestData(); } catch {}
+    }
+    await new Promise(r => setTimeout(r, 80));
     const finalAudio = generateFinalAudio(recordingSeconds);
     cleanupAudioRecording();
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -509,7 +441,6 @@ export default function Assistant() {
     if (recordedAudio?.url) {
       URL.revokeObjectURL(recordedAudio.url);
     }
-    pcmBuffersRef.current = [];
     audioChunksRef.current = [];
     setIsRecording(false);
     setIsPaused(false);
@@ -605,6 +536,11 @@ export default function Assistant() {
   const handleSendVoice = async () => {
     if (isRecording) {
       isRecordingRef.current = false;
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        try { mediaRecorderRef.current.requestData(); } catch {}
+      }
+      // Small 80ms delay to allow final audio packets to buffer
+      await new Promise(r => setTimeout(r, 80));
       const finalized = generateFinalAudio(recordingSeconds);
       cleanupAudioRecording();
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {

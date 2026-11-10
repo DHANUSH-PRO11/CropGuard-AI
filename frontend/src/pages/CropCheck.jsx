@@ -75,8 +75,13 @@ export default function CropCheck() {
         const data = await response.json();
         navigate('/result', { state: { result: data, imageUrl: image } });
       } else {
-        console.error('Analysis failed', response.statusText);
-        setErrorMsg(isTamil ? "படத்தை பகுப்பாய்வு செய்ய முடியவில்லை. தெளிவான படத்தை பதிவேற்றவும்." : "Unable to analyze this image. Please provide a clear leaf photo.");
+        let errorDetail = "";
+        try {
+          const errData = await response.json();
+          errorDetail = errData.detail || errData.message || "";
+        } catch {}
+        console.error('Analysis failed', response.status, response.statusText, errorDetail);
+        setErrorMsg(errorDetail || (isTamil ? "படத்தை பகுப்பாய்வு செய்ய முடியவில்லை. தெளிவான படத்தை பதிவேற்றவும்." : "Unable to analyze this image. Please provide a clear leaf photo."));
       }
     } catch (error) {
       console.error('API Error:', error);

@@ -142,8 +142,11 @@ class AgroNexAgent:
             node_start = time.perf_counter()
             tools_called.append("efficientnet_v2_disease_detector")
             try:
-                img = Image.open(io.BytesIO(image_bytes))
-                crop_prediction = self.detector.predict(img, preprocessing_mode="direct", enable_tta=True)
+                try:
+                    img_input = Image.open(io.BytesIO(image_bytes))
+                except Exception:
+                    img_input = image_bytes
+                crop_prediction = self.detector.predict(img_input, preprocessing_mode="direct", enable_tta=True)
                 log_node(
                     "disease_detection",
                     "completed",
