@@ -109,52 +109,191 @@ class AIAssistant:
         return "\n".join(parts)
 
     def _generate_fallback_response(self, question: str, language: str, context: dict = None) -> str:
-        """Deterministic, grounded agricultural response if Sarvam AI is offline or key missing."""
-        is_tamil = language == "ta"
-        crop = context.get("crop", "பயிர்" if is_tamil else "crop") if context else ("பயிர்" if is_tamil else "crop")
-        cond = context.get("condition", "ஆரோக்கியமானது" if is_tamil else "Healthy") if context else ""
+        """
+        Intelligent, grounded agricultural reasoner that analyzes the farmer's question,
+        identifies the crop and symptoms (leaf drop, growth, fertilizer, pests, disease, weather),
+        and synthesizes specific, actionable agronomic advice in Tamil or English.
+        """
+        q_lower = (question or "").lower()
+        is_tamil = language == "ta" or any('\u0b80' <= c <= '\u0bff' for c in question)
+
+        # 1. Identify Crop Mentioned in Question or Context
+        crop = context.get("crop") if context else None
+        crop_name = ""
+
+        crops_map = [
+            ("ஆப்பிள்", "Apple", ["ஆப்பிள்", "apple"]),
+            ("தக்காளி", "Tomato", ["தக்காளி", "tomato"]),
+            ("நெல்", "Paddy / Rice", ["நெல்", "அரிசி", "paddy", "rice"]),
+            ("பருத்தி", "Cotton", ["பருத்தி", "cotton"]),
+            ("மிளகாய்", "Chilli", ["மிளகாய்", "chilli", "chili", "pepper"]),
+            ("வாழை", "Banana", ["வாழை", "banana"]),
+            ("மக்காச்சோளம்", "Maize / Corn", ["மக்காச்சோளம்", "சோளம்", "maize", "corn"]),
+            ("மாமரம்", "Mango", ["மாமரம்", "மாம்பழம்", "மாங்காய்", "mango"]),
+            ("உருளைக்கிழங்கு", "Potato", ["உருளை", "potato"]),
+            ("வெங்காயம்", "Onion", ["வெங்காயம்", "onion"]),
+            ("தென்னை", "Coconut", ["தென்னை", "தேங்காய்", "coconut"]),
+            ("நிலக்கடலை", "Groundnut", ["நிலக்கடலை", "வேர்க்கடலை", "groundnut", "peanut"]),
+            ("எலுமிச்சை", "Citrus / Lemon", ["எலுமிச்சை", "citrus", "lemon"]),
+            ("கரும்பு", "Sugarcane", ["கரும்பு", "sugarcane"]),
+            ("கத்தரி", "Brinjal", ["கத்தரி", "brinjal", "eggplant"]),
+            ("வெண்டை", "Okra / Bhendi", ["வெண்டை", "okra", "bhendi"]),
+            ("முருங்கை", "Moringa", ["முருங்கை", "moringa", "drumstick"]),
+            ("மல்லிகை", "Jasmine", ["மல்லிகை", "jasmine", "பூச்செடி"]),
+            ("பயிர்", "Crop / Plant", ["செடி", "பயிர்", "மரம்", "plant", "tree", "crop"]),
+        ]
+
+        detected_crop_ta = None
+        detected_crop_en = None
+        for ta, en, keywords in crops_map:
+            if any(k in q_lower for k in keywords):
+                detected_crop_ta = ta
+                detected_crop_en = en
+                break
+
+        if not detected_crop_ta and crop:
+            detected_crop_ta = crop
+            detected_crop_en = crop
+
+        crop_header_ta = f" ({detected_crop_ta})" if detected_crop_ta else ""
+        crop_header_en = f" ({detected_crop_en})" if detected_crop_en else ""
+
+        # 2. Extract Symptoms, Problems & Intent
+        has_leaf_drop = any(w in q_lower for w in ["விழுகுத", "உதிர", "கொட்டு", "leaf drop", "falling", "shedding"])
+        has_growth_issue = any(w in q_lower for w in ["வளர", "வளர்ச்சி", "வளரல", "growth", "stunt", "slow growth", "not growing"])
+        has_fertilizer = any(w in q_lower for w in ["ஃபெர்டிலைசர்", "உரம்", "உர", "ஊட்டச்சத்து", "fertilizer", "nutrient", "npk", "urea", "potash", "manure"])
+        has_yellowing = any(w in q_lower for w in ["மஞ்சள்", "பழுப்பு", "yellow", "chlorosis", "pale"])
+        has_pests = any(w in q_lower for w in ["பூச்சி", "புழு", "வண்டு", "அசுவினி", "pest", "worm", "caterpillar", "borer", "bug", "aphid"])
+        has_fungus_blight = any(w in q_lower for w in ["பூஞ்சை", "கருகல்", "அழுகல்", "வாடல்", "புள்ளி", "fungus", "blight", "rot", "wilt", "spot", "mildew"])
+        has_flower_fruit_drop = any(w in q_lower for w in ["பூ உதிர", "காய் உதிர", "பூ கொட்டு", "flower drop", "fruit drop"])
+        has_water_issue = any(w in q_lower for w in ["தண்ணீர்", "பாசனம்", "நீர்", "water", "irrigation", "drainage"])
+        has_weather_query = any(w in q_lower for w in ["வானிலை", "மழை", "மருந்து அடிக்கலாமா", "spray", "weather", "rain"])
+        has_schemes = any(w in q_lower for w in ["திட்டம்", "மானியம்", "காப்பீடு", "scheme", "subsidy", "pm-kisan", "insurance"])
+
+        cond = context.get("condition") if context else ""
         weather = context.get("weather", {}) if context else {}
         alerts = weather.get("alerts", []) if isinstance(weather, dict) else []
-        schemes = context.get("schemes", []) if context and isinstance(context.get("schemes"), list) else []
 
-        if schemes:
-            sch = schemes[0]
-            if is_tamil:
-                return (
-                    f"அரசு விவசாய திட்டம் வழிகாட்டல்:\n"
-                    f"• திட்டம்: {sch.get('name_ta', sch.get('name'))}\n"
-                    f"• பயன்கள்: {sch.get('benefits_ta', sch.get('benefits'))}\n"
-                    f"• தகுதி: {sch.get('eligibility_ta', sch.get('eligibility'))}\n"
-                    f"• கூடுதல் விவரம் & விண்ணப்பிக்க: {sch.get('source')}"
-                )
-            else:
-                return (
-                    f"Government Agricultural Scheme Guidance:\n"
-                    f"• Scheme: {sch.get('name')}\n"
-                    f"• Benefits: {sch.get('benefits')}\n"
-                    f"• Eligibility: {sch.get('eligibility')}\n"
-                    f"• Official Portal: {sch.get('source')}"
-                )
-
+        # 3. Synthesize Tailored Response in Tamil
         if is_tamil:
-            lines = [f"அக்ரோநெக்ஸ் விவசாய வழிகாட்டல்:"]
-            if cond:
-                clean_cond = cond.replace('_', ' ')
-                lines.append(f"• கண்டறியப்பட்ட நிலை: {crop} - {clean_cond}.")
-            if alerts:
-                lines.append(f"• வானிலை எச்சரிக்கை: {alerts[0].get('message_ta', 'மழை வாய்ப்பு உள்ளது, பூச்சிக்கொல்லி தெளிப்பதை தவிர்க்கவும்.')}")
-            lines.append("• பரிந்துரை: பாதிக்கப்பட்ட இலைகளை உடனே அகற்றவும். இயற்கை வேப்ப எண்ணெய் (3%) தெளிக்கவும்.")
-            lines.append("• துல்லியமான உறுதிப்படுத்தலுக்கு அருகிலுள்ள வேளாண்மை உதவி அலுவலரை (KVK) அணுகவும்.")
+            lines = [f"🌾 அக்ரோநெக்ஸ் விவசாய வழிகாட்டல்{crop_header_ta}:"]
+
+            if has_schemes:
+                lines.append("• அரசு விவசாய நலத் திட்டங்கள்:")
+                lines.append("  1. பி.எம்-கிசான் (PM-KISAN): ஆண்டுக்கு ₹6,000 நேரடி உதவித்தொகை.")
+                lines.append("  2. பயிர் காப்பீட்டுத் திட்டம் (PMFBY): இயற்கை இடர்பாடுகளுக்கான இழப்பீடு.")
+                lines.append("  3. நுண்ணீர் பாசன மானியம்: சிறு, குறு விவசாயிகளுக்கு 100% மானியத்தில் சொட்டு நீர் பாசனம்.")
+                lines.append("• அருகிலுள்ள வட்டார வேளாண்மை விரிவாக்க மையத்தை (ADA Office) அணுகவும்.")
+                return "\n".join(lines)
+
+            if has_leaf_drop or has_growth_issue:
+                lines.append(f"• இலை உதிர்தல் மற்றும் வளர்ச்சி குறைபாட்டிற்கான முக்கிய காரணங்கள்:")
+                lines.append("  1. வேர் பகுதியில் அதிகப்படியான நீர் தேக்கம் அல்லது கடுமையான வறட்சி (வேர் அழுகல்).")
+                lines.append("  2. முக்கிய ஊட்டச்சத்துக்களான நைட்ரஜன், துத்தநாகம் (Zinc) மற்றும் இரும்புச்சத்து பற்றாக்குறை.")
+                lines.append("  3. மண்ணில் போதிய காற்றோட்டமின்மை அல்லது கார-அமிலத்தன்மை (pH) ஏற்றத்தாழ்வு.")
+
+            if has_fertilizer or has_growth_issue:
+                lines.append(f"• பரிந்துரைக்கப்படும் உர மேலாண்மை:")
+                lines.append("  1. இயற்கை உரம்: மட்கிய தொழு உரம் அல்லது மண்புழு உரம் 15-20 கிலோ மரத்தை சுற்றி 2 அடி தள்ளி இடவும்.")
+                lines.append("  2. வளர்ச்சி ஊக்கி: 19:19:19 (NPK) நீரில் கரையும் உரத்தை 1 லிட்டர் தண்ணீருக்கு 5 கிராம் வீதம் கலந்து இலைகளில் தெளிக்கவும்.")
+                lines.append("  3. நுண்ணூட்டச்சத்து: Zinc Sulphate மற்றும் Boron கலவையை தெளிப்பது புதிய தளிர்கள் விடவும் இலை உதிர்தலைத் தடுக்கவும் உதவும்.")
+
+            if has_yellowing:
+                lines.append("• இலைகள் மஞ்சள் நிறமாவதை சரிசெய்ய:")
+                lines.append("  1. எப்சம் உப்பு (Magnesium Sulphate) 1 லிட்டர் தண்ணீருக்கு 5 கிராம் வீதம் தெளிக்கவும்.")
+                lines.append("  2. இரும்புச்சத்து குறைபாட்டிற்கு Ferrous Sulphate (19:19:19 உடன்) தெளிப்பது இலைகளை மீண்டும் பசுமையாக்கும்.")
+
+            if has_pests:
+                lines.append("• பூச்சி & புழு கட்டுப்பாடு:")
+                lines.append("  1. வேப்ப எண்ணெய் கரைசல் (3% - 10 லிட்டர் தண்ணீருக்கு 30 மி.லி) + காதி சோப் கலந்து மாலையில் தெளிக்கவும்.")
+                lines.append("  2. சாறு உறிஞ்சும் பூச்சிகளுக்கு மஞ்சள் மற்றும் நீல நிற ஒட்டும் பொறிகளை ஏக்கருக்கு 6-8 வைக்கவும்.")
+
+            if has_fungus_blight or cond:
+                cond_text = f" ({cond.replace('_', ' ')})" if cond else ""
+                lines.append(f"• நோய் & பூஞ்சை மேலாண்மை{cond_text}:")
+                lines.append("  1. பாதிக்கப்பட்ட இலைகளை உடனே வெட்டி அகற்றி அழிக்கவும்.")
+                lines.append("  2. காப்பர் ஆக்சிகுளோரைடு (COC) 1 லிட்டருக்கு 2.5 கிராம் அல்லது டிரைக்கோடெர்மா விரிடி உயிரி பூஞ்சாணக்கொல்லி இடவும்.")
+
+            if has_flower_fruit_drop:
+                lines.append("• பூ & பிஞ்சு உதிர்தலைத் தடுக்க:")
+                lines.append("  1. பிளனோபிக்ஸ் (Planofix) 4.5 லிட்டர் தண்ணீருக்கு 1 மி.லி வீதம் பூக்கும் தருணத்தில் தெளிக்கவும்.")
+                lines.append("  2. போராக்ஸ் (Borax) 1 கிராம்/லிட்டர் தெளிப்பது காய் பிடிப்பை அதிகரிக்கும்.")
+
+            if has_weather_query or alerts:
+                if alerts:
+                    lines.append(f"• வானிலை ஆலோசனை: {alerts[0].get('message_ta', 'மழை எச்சரிக்கை உள்ளது, மருந்து தெளிப்பதைத் தவிர்க்கவும்.')}")
+                else:
+                    lines.append("• தெளிப்பு நேரம்: காற்று வேகம் குறைவாக உள்ள காலை 7-10 மணி அல்லது மாலை 4-6 மணி வேளையில் மருந்து தெளிக்கவும்.")
+
+            # Default actionable conclusion
+            if len(lines) == 1:
+                lines.append("• பயிர் பாதுகாப்பு வழிகாட்டல்:")
+                lines.append("  1. மண்ணின் ஈரப்பதத்தை சீராகப் பராமரித்து, வேர் பகுதியில் நீர் தேங்காமல் பார்த்துக் கொள்ளவும்.")
+                lines.append("  2. இயற்கை மண்புழு உரம் மற்றும் நுண்ணூட்டச்சத்து கலவை இடுவது செடியின் நோய் எதிர்ப்பு சக்தியை அதிகரிக்கும்.")
+                lines.append("  3. இயற்கை வேப்ப எண்ணெய் (3%) கரைசலை 15 நாட்களுக்கு ஒருமுறை தெளிக்கவும்.")
+
+            lines.append("• மேலதிக கள ஆய்வுக்கு உங்கள் பகுதி வேளாண் அறிவியல் நிலையத்தை (KVK) அணுகவும்.")
             return "\n".join(lines)
+
+        # 4. Synthesize Tailored Response in English
         else:
-            lines = [f"AgroNex Agricultural Copilot Guidance:"]
-            if cond:
-                clean_cond = cond.replace('_', ' ')
-                lines.append(f"• Model Observation: {crop} ({clean_cond}).")
-            if alerts:
-                lines.append(f"• Weather Advisory: {alerts[0].get('message_en', 'Rain or high humidity expected. Postpone chemical sprays.')}")
-            lines.append("• Immediate Action: Prune affected leaves, ensure proper field drainage, and consider bio-controls like Neem-based spray.")
-            lines.append("• For uncertain or severe symptoms, please verify with your local agricultural extension officer (KVK).")
+            lines = [f"🌾 AgroNex Agricultural Copilot Guidance{crop_header_en}:"]
+
+            if has_schemes:
+                lines.append("• Key Government Agricultural Schemes:")
+                lines.append("  1. PM-KISAN: ₹6,000 annual direct income support in 3 equal installments.")
+                lines.append("  2. PMFBY (Pradhan Mantri Fasal Bima Yojana): Subsidized comprehensive crop insurance.")
+                lines.append("  3. Per Drop More Crop (Micro Irrigation): Up to 100% subsidy for drip/sprinkler setups.")
+                lines.append("• Visit your nearest Krishi Vigyan Kendra (KVK) or Agriculture Department to apply.")
+                return "\n".join(lines)
+
+            if has_leaf_drop or has_growth_issue:
+                lines.append("• Primary Causes for Leaf Drop & Stunted Growth:")
+                lines.append("  1. Root Stress: Waterlogging or extreme root dryness leading to early root rot.")
+                lines.append("  2. Nutrient Deficiencies: Lack of vegetative Nitrogen, Zinc, or Magnesium.")
+                lines.append("  3. Compacted Soil: Poor aeration preventing roots from expanding.")
+
+            if has_fertilizer or has_growth_issue:
+                lines.append("• Recommended Fertilizer & Nutrition Schedule:")
+                lines.append("  1. Organic Base: Apply 15-20 kg well-decomposed FYM (farmyard manure) or vermicompost around the drip line.")
+                lines.append("  2. Foliar Booster: Spray 19:19:19 (NPK) water-soluble fertilizer at 5g per litre of water to spur active vegetative shoots.")
+                lines.append("  3. Micronutrient Mix: Apply Zinc Sulphate and Boron to halt premature leaf shedding and promote canopy vigor.")
+
+            if has_yellowing:
+                lines.append("• Correcting Yellowing / Chlorotic Foliage:")
+                lines.append("  1. Spray Epsom Salt (Magnesium Sulphate) at 5g/L to restore chlorophyll synthesis.")
+                lines.append("  2. Apply chelated Iron/Zinc if interveinal yellowing persists.")
+
+            if has_pests:
+                lines.append("• Integrated Pest Management:")
+                lines.append("  1. Spray 3% Neem oil emulsion (30ml in 10L water + mild soap) during calm evening hours.")
+                lines.append("  2. Install yellow sticky traps (6-8 per acre) to intercept sucking pests.")
+
+            if has_fungus_blight or cond:
+                cond_text = f" ({cond.replace('_', ' ')})" if cond else ""
+                lines.append(f"• Fungal & Pathology Management{cond_text}:")
+                lines.append("  1. Prune and safely destroy heavily spotted/infected foliage to stop spread.")
+                lines.append("  2. Apply Copper Oxychloride (2.5g/L) or bio-fungicide Trichoderma viride around the root zone.")
+
+            if has_flower_fruit_drop:
+                lines.append("• Mitigating Flower & Fruit Drop:")
+                lines.append("  1. Spray Planofix (alpha naphthyl acetic acid) at 1ml per 4.5 litres of water.")
+                lines.append("  2. Supplement with Borax (1g/L) during flower bud initiation.")
+
+            if has_weather_query or alerts:
+                if alerts:
+                    lines.append(f"• Weather Alert: {alerts[0].get('message_en', 'Rain forecasted. Postpone chemical foliar applications.')}")
+                else:
+                    lines.append("• Safe Spray Window: Spray only during calm morning (7-10 AM) or late afternoon (4-6 PM) when wind is <20 km/h.")
+
+            # Default actionable conclusion
+            if len(lines) == 1:
+                lines.append("• Agronomic Action Plan:")
+                lines.append("  1. Maintain steady soil moisture without surface water accumulation.")
+                lines.append("  2. Incorporate organic vermicompost and balanced micronutrients to strengthen natural plant immunity.")
+                lines.append("  3. Inspect leaf undersides weekly for early pest colonies.")
+
+            lines.append("• For certified on-site verification, consult your local agricultural extension officer (KVK).")
             return "\n".join(lines)
 
     def answer(self, question: str, language: str = "en", context: dict = None) -> str:
