@@ -11,6 +11,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
+      - key: GNANI_API_KEY
+        sync: false
       - key: SARVAM_API_KEY
         sync: false
       - key: SUPABASE_URL
