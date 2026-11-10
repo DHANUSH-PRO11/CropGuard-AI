@@ -1,48 +1,41 @@
-# 🌾 AgroNex (CropGuard AI) — Solution Pitch
-**Autonomous Voice-First AI Copilot for Indian Farmers**  
-*Built for the Great Indian AI Internship Challenge 2026 | Powered by Gnani AI
+ 🌾 AgroNex: Autonomous Vernacular Voice Copilot for Indian Farmers
 
----
+Hands-free multimodal agricultural advisory fusing real-time computer vision disease detection, live micro-climate spray windows, and Gnani AI speech intelligence in regional languages.
 
-### 1. Problem Statement
-Smallholder farmers across rural India lose **15% to 30% of their crop yields annually** due to delayed diagnosis of leaf diseases and ill-timed pesticide spraying. Furthermore, most existing agricultural apps are text-heavy and English-centric, creating a digital barrier for farmers who are working directly in fields with soiled hands and require hands-free, regional-language interaction.
 
-### 2. The Solution: AgroNex
-**AgroNex** is an autonomous, multimodal agricultural copilot that integrates:
-1. **Computer Vision Disease Detection**: Instant leaf analysis (38 disease classes via EfficientNetV2-S ONNX) with blur and foliage quality gates.
-2. **Real-time Micro-climate Weather Feed**: Live 24-hour and 7-day meteorological forecasts via Open-Meteo.
-3. **Automated Spray Window Gate**: Automatically prevents wasteful chemical runoff by verifying if rainfall (>60% prob / >2mm) or high winds (>25 km/h) are impending.
-4. **Voice-First Vernacular Interaction**: Fully powered by **Gnani AI** speech intelligence.
 
----
+1. Problem Statement
+Over 140 million Indian smallholder farmers lose "15% to 30% of their crop yields annually" due to delayed foliar disease identification and pesticide spray run-off caused by unpredictable weather. Existing agricultural platforms rely on complex, text-heavy English interfaces that are impractical for farmers working in dusty fields with soiled hands. There is a critical lack of voice-first, code-mixed regional tools that integrate instant visual crop diagnostics with grounded meteorological risk safety.
 
-### 3. Gnani AI Voice Stack Integration
-AgroNex uses Gnani AI's proprietary speech models to deliver a completely hands-free voice experience:
-- **Speech-to-Text (Gnani Prisma v3.0)**:
-  - Transcribes spoken farmer queries using automatic Indic language detection (`indic-auto`) and robust conversational code-mixing (e.g., Tamil, Hindi, Tanglish, Hinglish).
-- **Text-to-Speech (Gnani Timbre v3.0)**:
-  - Generates natural, expressive spoken audio advice in Indian languages using low-latency neural synthesis (voice: `Lakshmi` / `Shivani`), allowing farmers to hear diagnosis and spray advisories directly in the field.
+2. Proposed Solution & Core Workflow
+AgroNex delivers an autonomous, voice-driven agricultural copilot built specifically for rural and Tier-2/3 farming communities. A farmer snaps a photo of an infected leaf and speaks a query in Tamil, Hindi, or conversational code-mix (e.g., Tanglish/Hinglish). AgroNex transcribes the audio via "Gnani Prisma v3.0 STT", validates leaf quality, executes ONNX neural disease inference, and pulls live Open-Meteo forecasts to enforce spray safety windows (blocking sprays if rain >60% or winds >25 km/h). The synthesized, safe advisory is then read aloud in natural regional speech using "Gnani Timbre v3.0 TTS".
 
----
+3. Architecture & Tech Stack
+Frontend / UI:
+ React 19, Vite, Tailwind CSS v4, Lucide Icons, bilingual i18n (Tamil & English), responsive mobile-first PWA design.
+Backend & Services:
+ FastAPI (Python 3.11/3.12), RESTful endpoints, asynchronous streaming, Uvicorn ASGI server.
+- **AI / Speech / ML Models**:
+  - **Gnani AI Prisma v3.0 STT**: Automatic Indic language detection (`indic-auto`) and conversational code-mix speech transcription.
+  - **Gnani AI Timbre v3.0 TTS**: Neural speech synthesis for regional audio playback (`Lakshmi` voice).
+  - **EfficientNetV2-S (ONNX Runtime)**: 38-class PlantVillage crop disease classifier with Laplacian blur and foliage quality gates.
+  - **Agricultural Knowledge Reasoner**: Grounded anti-hallucination recommendation engine with PM-KISAN subsidy matching.
+- **Data & Integrations**: Open-Meteo Micro-climate API, Supabase Cloud Storage & Postgres with zero-setup resilient local SQLite fallback.
 
-### 4. Workflow Architecture
+### 4. Key Features & Novelty
+- **Voice-First Vernacular Inclusion**: Hands-free voice interface tailored for farmers in regional dialects and code-mixes using Gnani AI's proprietary speech models.
+- **Automated Weather Spray Safety Gate**: Prevents expensive pesticide wastage and chemical run-off by checking real-time rainfall and wind thresholds before advising sprays.
+- **Uncertainty & Quality Gatekeeping**: Eliminates hallucinations by rejecting blurry/non-foliage photos and flagging predictions below 60% confidence for KVK extension officer review.
+- **Offline & Low-Bandwidth Resilience**: Seamlessly operates with local SQLite caching when network connectivity drops in remote fields.
+
+### 5. Setup & Execution
+```bash
+# 1. Backend Setup & Run (Terminal 1)
+pip install -r backend/requirements.txt
+echo "GNANI_API_KEY=your_gnani_key" > backend/.env
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload --app-dir backend
+
+# 2. Frontend Setup & Run (Terminal 2)
+npm install --prefix frontend && npm run dev --prefix frontend
+# Access at: http://localhost:5173
 ```
-[Farmer Voice Query] ──► Gnani Prisma STT ──► AgroNex Intent Router
-                                                     │
-[Leaf Snapshot] ──────► ONNX Vision Gate ────────────┼──► Governed Agent Loop
-[GPS Location] ───────► Open-Meteo Weather ──────────┤    (Spray Risk & Safety Rules)
-                                                     │
-[Spoken Guidance] ◄─── Gnani Timbre TTS ◄────────────┘
-```
-
----
-
-### 5. Real-World Impact
-- **Financial Savings**: Prevents expensive chemical pesticide wastage by warning farmers before rainfall washes treatments away.
-- **Vernacular Inclusivity**: Eliminates language and literacy barriers for farmers in Tier-2, Tier-3, and rural communities.
-- **Offline Resilience**: Operates with graceful local fallbacks ensuring continuous advisory even in low-bandwidth rural zones.
-
----
-**Repository**: [github.com/DHANUSH-PRO11/CropGuard-AI](https://github.com/DHANUSH-PRO11/CropGuard-AI)  
-**Developer**: Dhanush G | Built for Gnani AI Great Indian AI Internship Challenge 2026
-

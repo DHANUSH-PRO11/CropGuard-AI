@@ -11,6 +11,11 @@
 > **AgroNex Agent** is an autonomous, multimodal agricultural copilot built for Indian smallholder and commercial farmers. Built for the **Great Indian AI Internship Challenge 2026** powered by **Gnani AI's Prisma (STT)** & **Timbre (TTS)** voice models, it coordinates computer-vision crop disease detection, live micro-climate weather risk feeds, and bilingual voice reasoning (Tamil, Hindi, English) into an evidence-grounded action loop.
 >
 > 📄 **[Read 1-Page Solution Pitch for Gnani AI Challenge](SOLUTION_PITCH.md)**
+>
+> **Executive Summary for Gnani AI Challenge:**
+> - **Voice-First Ingestion**: Hands-free vernacular voice input transcribed via **Gnani Prisma v3.0 STT** (`indic-auto` & conversational code-mixing).
+> - **Grounded Agricultural Loop**: 38-class EfficientNetV2-S ONNX leaf disease scanner coupled with real-time Open-Meteo weather spray safety gates.
+> - **Spoken Output Synthesis**: Actionable agronomic advice spoken aloud via **Gnani Timbre v3.0 TTS** in regional Indian voices (`Lakshmi`).
 
 ---
 
