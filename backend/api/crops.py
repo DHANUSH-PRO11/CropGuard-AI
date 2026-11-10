@@ -1,4 +1,5 @@
 from typing import Optional, List
+import io
 import os
 import logging
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
@@ -25,30 +26,24 @@ async def analyze_crop(
     if not file.content_type.startswith('image/'):
         raise HTTPException(status_code=400, detail="Uploaded file is not an image.")
         
-    # Save the file temporarily
-    os.makedirs("uploads", exist_ok=True)
-    filename = os.path.basename(file.filename or "leaf.jpg")
-    file_path = f"uploads/{filename}"
     file_bytes = await file.read()
     if len(file_bytes) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Uploaded file exceeds maximum allowed size of 10 MB.")
     
-    with open(file_path, "wb") as buffer:
-        buffer.write(file_bytes)
-        
     try:
-        img = Image.open(file_path)
+        img = Image.open(io.BytesIO(file_bytes))
         img_width, img_height = img.size
     except Exception as e:
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid image.")
         
     file_size_kb = len(file_bytes) / 1024
+    filename = os.path.basename(file.filename or "leaf.jpg")
     
     logger.info(f"Analyzing crop image: {filename} ({img_width}x{img_height}, {file_size_kb:.1f} KB, mode: {mode}, tta: {enable_tta})")
     
-    # Use AI service
+    # Use AI service with in-memory image (Zero disk write required for serverless compatibility)
     try:
-        prediction = detector.predict(file_path, preprocessing_mode=mode, enable_tta=enable_tta)
+        prediction = detector.predict(img, preprocessing_mode=mode, enable_tta=enable_tta)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Crop analysis failed: {str(e)}")
         
@@ -56,10 +51,9 @@ async def analyze_crop(
     saved_to_supabase = False
     if db is not None:
         try:
-            # Upload to Supabase Storage
+            # Upload directly from memory to Supabase Storage
             file_name_in_storage = f"{int(datetime.utcnow().timestamp())}_{filename}"
-            with open(file_path, "rb") as f:
-                res = db.storage.from_("crop-images").upload(file_name_in_storage, f.read(), {"content-type": file.content_type})
+            res = db.storage.from_("crop-images").upload(file_name_in_storage, file_bytes, {"content-type": file.content_type})
                 
             public_url = db.storage.from_("crop-images").get_public_url(file_name_in_storage)
             
@@ -83,7 +77,7 @@ async def analyze_crop(
     try:
         local_db.save_crop_analysis({
             "crop_type": prediction.get("crop", "Unknown"),
-            "image_path": public_url or file_path,
+            "image_path": public_url or f"memory://{filename}",
             "detected_disease": prediction.get("condition", "Unknown"),
             "confidence": float(prediction.get("confidence", 0.0)),
             "severity": prediction.get("severity", "Not determined"),
@@ -91,13 +85,6 @@ async def analyze_crop(
         })
     except Exception as e:
         logger.warning(f"Failed to save to local db: {e}")
-    
-    # Optionally remove local file
-    try:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-    except Exception:
-        pass
     
     return prediction
 

@@ -4,12 +4,14 @@ Orchestrates Computer Vision Disease Detection, Real-time Open-Meteo Weather Ris
 Sarvam AI Conversational Reasoning, and Supabase Persistence into an AgentFoundry-compliant loop.
 """
 
+import io
 import os
 import time
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from pathlib import Path
+from PIL import Image
 
 from services.ai.disease_detector import DiseaseDetector
 from services.ai.ai_assistant import AIAssistant
@@ -139,15 +141,9 @@ class AgroNexAgent:
         if should_run_vision:
             node_start = time.perf_counter()
             tools_called.append("efficientnet_v2_disease_detector")
-            temp_image_path = None
             try:
-                os.makedirs("uploads", exist_ok=True)
-                clean_name = os.path.basename(image_filename or "agent_leaf.jpg")
-                temp_image_path = f"uploads/{int(time.time()*1000)}_{clean_name}"
-                with open(temp_image_path, "wb") as f:
-                    f.write(image_bytes)
-
-                crop_prediction = self.detector.predict(temp_image_path, preprocessing_mode="direct", enable_tta=True)
+                img = Image.open(io.BytesIO(image_bytes))
+                crop_prediction = self.detector.predict(img, preprocessing_mode="direct", enable_tta=True)
                 log_node(
                     "disease_detection",
                     "completed",
@@ -168,12 +164,6 @@ class AgroNexAgent:
                     {"error": str(e)},
                     (time.perf_counter() - node_start) * 1000
                 )
-            finally:
-                if temp_image_path and os.path.exists(temp_image_path):
-                    try:
-                        os.remove(temp_image_path)
-                    except Exception:
-                        pass
         elif has_prior_context:
             conf_raw = float(context.get("confidence", 0.0))
             conf_norm = conf_raw / 100.0 if conf_raw > 1.0 else conf_raw

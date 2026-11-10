@@ -84,6 +84,8 @@ export default function Assistant() {
   const scriptProcessorRef = useRef(null);
   const isRecordingRef = useRef(false);
   const timerIntervalRef = useRef(null);
+  const recordingStartTimeRef = useRef(null);
+  const sampleRateRef = useRef(48000);
   const streamRef = useRef(null);
   const audioCtxRef = useRef(null);
   const animFrameRef = useRef(null);
@@ -185,6 +187,7 @@ export default function Assistant() {
 
   function cleanupAudioRecording() {
     isRecordingRef.current = false;
+    recordingStartTimeRef.current = null;
     if (timerIntervalRef.current) {
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
@@ -192,6 +195,10 @@ export default function Assistant() {
     if (animFrameRef.current) {
       cancelAnimationFrame(animFrameRef.current);
       animFrameRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop(); } catch {}
+      mediaRecorderRef.current = null;
     }
     if (scriptProcessorRef.current) {
       try {
@@ -327,15 +334,22 @@ export default function Assistant() {
 
   // Helper to generate finalized audio object (prefers pristine 16kHz WAV, falls back to MediaRecorder WebM)
   const generateFinalAudio = (durationSecs) => {
-    const wavBlob = encodeWavBlob(pcmBuffersRef.current, audioCtxRef.current?.sampleRate || 48000);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try { mediaRecorderRef.current.requestData(); } catch {}
+    }
+
+    const rate = sampleRateRef.current || audioCtxRef.current?.sampleRate || 48000;
+    const wavBlob = encodeWavBlob(pcmBuffersRef.current, rate);
     if (wavBlob && wavBlob.size > 44) {
       const file = new File([wavBlob], `voice_${Date.now()}.wav`, { type: 'audio/wav' });
       const url = URL.createObjectURL(wavBlob);
       return { file, blob: wavBlob, url, name: file.name, duration: formatTimer(durationSecs || 1) };
     }
     if (audioChunksRef.current.length > 0) {
-      const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-      const file = new File([blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+      const mime = mediaRecorderRef.current?.mimeType || 'audio/webm';
+      const ext = mime.includes('mp4') ? 'mp4' : (mime.includes('ogg') ? 'ogg' : 'webm');
+      const blob = new Blob(audioChunksRef.current, { type: mime });
+      const file = new File([blob], `voice_${Date.now()}.${ext}`, { type: mime });
       const url = URL.createObjectURL(blob);
       return { file, blob, url, name: file.name, duration: formatTimer(durationSecs || 1) };
     }
@@ -346,6 +360,7 @@ export default function Assistant() {
   // Live Microphone Recording & Waveform Visualizer
   // ----------------------------------------------------
   const startRecording = async () => {
+    cleanupAudioRecording();
     setErrorMsg(null);
     setRecordedAudio(null);
     setIsPaused(false);
@@ -358,7 +373,13 @@ export default function Assistant() {
         return;
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      });
       streamRef.current = stream;
       isRecordingRef.current = true;
 
@@ -367,7 +388,13 @@ export default function Assistant() {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         if (AudioContextClass) {
           const audioCtx = new AudioContextClass();
+          // Vital: resume audio context so browser streams microphone audio
+          if (audioCtx.state === 'suspended') {
+            await audioCtx.resume();
+          }
           audioCtxRef.current = audioCtx;
+          sampleRateRef.current = audioCtx.sampleRate;
+
           const analyser = audioCtx.createAnalyser();
           analyser.fftSize = 64;
           const source = audioCtx.createMediaStreamSource(stream);
@@ -387,7 +414,7 @@ export default function Assistant() {
 
           const dataArray = new Uint8Array(analyser.frequencyBinCount);
           const updateWave = () => {
-            if (!analyser) return;
+            if (!isRecordingRef.current) return;
             analyser.getByteFrequencyData(dataArray);
             const bars = [];
             const barCount = 32;
@@ -432,10 +459,18 @@ export default function Assistant() {
 
       setIsRecording(true);
       setRecordingSeconds(0);
+      recordingStartTimeRef.current = Date.now();
 
+      // Rock-solid wall-clock timer: prevents duplicate intervals and jumping by 3, 4, 5
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
       timerIntervalRef.current = setInterval(() => {
-        setRecordingSeconds(prev => prev + 1);
-      }, 1000);
+        if (recordingStartTimeRef.current) {
+          const elapsed = Math.floor((Date.now() - recordingStartTimeRef.current) / 1000);
+          setRecordingSeconds(elapsed);
+        }
+      }, 250);
 
     } catch (err) {
       console.error("Microphone access error:", err);
@@ -579,6 +614,8 @@ export default function Assistant() {
       setIsPaused(false);
       if (finalized) {
         await processVoiceSubmission(finalized);
+      } else {
+        setErrorMsg(i18n.language === 'ta' ? "குரல் பதிவு கண்டறியப்படவில்லை. மீண்டும் மைக் அழுத்தி பேசவும்." : "No audio captured. Please click the mic and speak clearly.");
       }
       return;
     }
