@@ -1,6 +1,6 @@
 # 🌾 AgroNex (CropGuard AI) — Solution Pitch
 **Autonomous Voice-First AI Copilot for Indian Farmers**  
-*Built for the Great Indian AI Internship Challenge 2026 | Powered by Gnani AI*
+*Built for the Great Indian AI Internship Challenge 2026 | Powered by Gnani AI
 
 ---
 
@@ -45,3 +45,4 @@ AgroNex uses Gnani AI's proprietary speech models to deliver a completely hands-
 ---
 **Repository**: [github.com/DHANUSH-PRO11/CropGuard-AI](https://github.com/DHANUSH-PRO11/CropGuard-AI)  
 **Developer**: Dhanush G | Built for Gnani AI Great Indian AI Internship Challenge 2026
+

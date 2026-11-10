@@ -372,7 +372,10 @@ class TestAgroNexE2EVerification(unittest.TestCase):
             language="ta"
         )
         self.assertTrue(agent_out["success"])
-        self.assertIn("sarvam_speech_to_text", agent_out["tools_called"])
+        self.assertTrue(
+            "sarvam_speech_to_text" in agent_out["tools_called"] or "gnani_prisma_speech_to_text" in agent_out["tools_called"],
+            f"Expected STT tool in tools_called, found: {agent_out['tools_called']}"
+        )
         self.assertEqual(agent_out["transcription"], "தக்காளி இலை கருகுகிறது")
         self.assertIsNotNone(agent_out["audio_base64"])
 
