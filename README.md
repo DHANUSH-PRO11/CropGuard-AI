@@ -7,9 +7,11 @@
 [![ONNX](https://img.shields.io/badge/ONNX-EfficientNetV2--S-blueviolet.svg)](https://onnxruntime.ai)
 [![Gnani AI](https://img.shields.io/badge/Gnani_AI-Prisma%20v3.0%20STT%20%7C%20Timbre%20v3.0%20TTS-0052CC.svg)](https://gnani.ai)
 [![Challenge](https://img.shields.io/badge/Gnani_AI-Great_Indian_AI_Internship_Challenge-FF9933.svg)](https://gnani.ai/internship)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-cropguard--ai--nu.vercel.app-000000?logo=vercel)](https://cropguard-ai-nu.vercel.app/)
 
 > **AgroNex Agent** is an autonomous, multimodal agricultural copilot built for Indian smallholder and commercial farmers. Built for the **Great Indian AI Internship Challenge 2026** powered by **Gnani AI's Prisma (STT)** & **Timbre (TTS)** voice models, it coordinates computer-vision crop disease detection, live micro-climate weather risk feeds, and bilingual voice reasoning (Tamil, Hindi, English) into an evidence-grounded action loop.
 >
+> 🌐 **Live App**: [https://cropguard-ai-nu.vercel.app/](https://cropguard-ai-nu.vercel.app/)  
 > 📄 **[Read 1-Page Solution Pitch for Gnani AI Challenge](SOLUTION_PITCH.md)**
 >
 > **Executive Summary for Gnani AI Challenge:**
