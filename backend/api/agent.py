@@ -3,6 +3,7 @@ FastAPI Router for AgroNex Agent — Agricultural Copilot Endpoints
 """
 
 import io
+import os
 import json
 from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
@@ -46,7 +47,9 @@ async def run_agent_workflow(
     image_bytes = None
     image_filename = None
     if image is not None:
-        if not image.content_type.startswith("image/"):
+        img_ct = (image.content_type or "").lower()
+        img_ext = os.path.splitext(image.filename or "")[1].lower()
+        if not img_ct.startswith("image/") and img_ext not in {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tiff"}:
             raise HTTPException(status_code=400, detail="Provided file is not an image.")
         image_bytes = await image.read()
         if len(image_bytes) > MAX_FILE_SIZE_BYTES:

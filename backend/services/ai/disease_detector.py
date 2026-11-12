@@ -93,7 +93,13 @@ class DiseaseDetector:
             )
             return "Warning: Low Resolution", msg, {"width": float(w), "height": float(h)}
 
-        arr = np.array(img, dtype=np.float32)
+        # Downsample huge smartphone photos (e.g. 12MP+) for fast, low-memory quality evaluation
+        eval_img = img
+        if max(w, h) > 1024:
+            eval_img = img.copy()
+            eval_img.thumbnail((1024, 1024), Image.Resampling.BILINEAR)
+
+        arr = np.array(eval_img, dtype=np.float32)
         r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
 
         # Luminance channel Y (ITU-R BT.601)

@@ -63,12 +63,29 @@ class AIAssistant:
                 logger.warning("sarvamai package is not installed; AI assistant features will operate in fallback mode.")
 
 
-    def clean_for_tts(self, text: str) -> str:
-        """Strip markdown symbols (asterisks, hashtags, bullets) so TTS reads smoothly."""
-        clean = re.sub(r'[*_~`#]', '', text)
-        clean = re.sub(r'^\s*[-+*]\s+', '', clean, flags=re.MULTILINE)
-        clean = re.sub(r'\n+', ' ', clean).strip()
-        return clean
+    def clean_for_tts(self, text: str, max_chars: int = 260) -> str:
+        """Strip markdown/emoji symbols and summarize to a crisp spoken length for fast Timbre TTS."""
+        # Remove markdown tokens, bullets, and emoji/pictograph ranges while preserving Tamil/ASCII punctuation
+        clean = re.sub(r'[*_~`#•🌾🎤📷🤖⚠️✅🌱💧☀️]+', ' ', text)
+        clean = re.sub(r'^\s*(?:[-+*]|\d+\.)\s+', '', clean, flags=re.MULTILINE)
+        clean = re.sub(r'\n+', '. ', clean)
+        clean = re.sub(r'\s+', ' ', clean).strip()
+        clean = re.sub(r'\.\s*\.', '.', clean)
+
+        if len(clean) <= max_chars:
+            return clean
+
+        # Trim cleanly at the nearest sentence or punctuation boundary
+        truncated = clean[:max_chars]
+        for sep in ['. ', '। ', ', ', '; ', ': ']:
+            idx = truncated.rfind(sep)
+            if idx >= int(max_chars * 0.45):
+                return truncated[:idx + 1].strip()
+
+        last_space = truncated.rfind(' ')
+        if last_space > 0:
+            return truncated[:last_space].strip() + "."
+        return truncated.strip()
 
     def _format_context_block(self, context: dict) -> str:
         """Serializes crop diagnosis and real-time weather into an authoritative grounding block."""
@@ -383,12 +400,12 @@ class AIAssistant:
                 "encoding": "linear_pcm",
                 "container": "wav",
                 "num_channels": 1,
-                "sample_rate": 24000,
+                "sample_rate": 16000,
                 "sample_width": 2
             }
         }
         logger.info(f"Calling Gnani AI Timbre v3 TTS ({tts_lang}, {len(clean_text)} chars)")
-        resp = requests.post(url, headers=headers, json=payload, timeout=30)
+        resp = requests.post(url, headers=headers, json=payload, timeout=15)
         if resp.status_code == 200 and resp.content:
             logger.info(f"Gnani Timbre TTS success ({len(resp.content)} audio bytes received)")
             return base64.b64encode(resp.content).decode("utf-8")

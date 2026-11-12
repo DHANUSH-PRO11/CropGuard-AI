@@ -23,7 +23,10 @@ async def analyze_crop(
     enable_tta: bool = Form(False),
     db: Optional[Client] = Depends(get_supabase)
 ):
-    if not file.content_type.startswith('image/'):
+    content_type = (file.content_type or "").lower()
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    valid_exts = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tiff"}
+    if not content_type.startswith("image/") and ext not in valid_exts:
         raise HTTPException(status_code=400, detail="Uploaded file is not an image.")
         
     file_bytes = await file.read()
@@ -53,7 +56,8 @@ async def analyze_crop(
         try:
             # Upload directly from memory to Supabase Storage
             file_name_in_storage = f"{int(datetime.utcnow().timestamp())}_{filename}"
-            res = db.storage.from_("crop-images").upload(file_name_in_storage, file_bytes, {"content-type": file.content_type})
+            upload_ct = content_type if content_type.startswith("image/") else "image/jpeg"
+            res = db.storage.from_("crop-images").upload(file_name_in_storage, file_bytes, {"content-type": upload_ct})
                 
             public_url = db.storage.from_("crop-images").get_public_url(file_name_in_storage)
             
