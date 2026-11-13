@@ -27,8 +27,7 @@ CORE PRINCIPLES & SAFETY RULES:
 
 class AIAssistant:
     def __init__(self):
-        # Load GNANI_API_KEY and SARVAM_API_KEY from backend/.env or root .env
-        base_dir = Path(__file__).resolve().parents[2]
+       
         load_dotenv(dotenv_path=base_dir / ".env")
         load_dotenv(dotenv_path=base_dir / "backend" / ".env")
 
