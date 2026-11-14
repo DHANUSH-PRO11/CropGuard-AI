@@ -575,7 +575,8 @@ class AIAssistant:
         filename: str = "audio.wav",
         preferred_language: str = "ta",
         content_type: str = "audio/wav",
-        context: dict = None
+        context: dict = None,
+        fallback_transcription: str = None
     ) -> dict:
         # Step 1: Speech-to-Text (Saaras v4)
         detected_lang = "ta-IN" if "ta" in preferred_language else "en-IN"
@@ -583,7 +584,13 @@ class AIAssistant:
         try:
             detected_lang, transcript = self.speech_to_text(audio_bytes, filename=filename, content_type=content_type)
         except Exception as e:
-            logger.exception(f"STT processing failed for file '{filename}' ({len(audio_bytes)} bytes): {e}")
+            logger.warning(f"Cloud STT processing failed for file '{filename}' ({len(audio_bytes)} bytes): {e}")
+
+        # Use client-side fallback transcription if cloud STT failed or was empty
+        if not transcript and fallback_transcription and fallback_transcription.strip():
+            transcript = fallback_transcription.strip()
+            detected_lang = "ta-IN" if any('\u0b80' <= c <= '\u0bff' for c in transcript) or "ta" in preferred_language else "en-IN"
+            logger.info(f"Using client speech transcript fallback: '{transcript}'")
 
         if not transcript:
             fallback_msg = "மன்னிக்கவும், உங்கள் குரல் தெளிவாகக் கேட்கவில்லை. மீண்டும் பேசவும் அல்லது தட்டச்சு செய்யவும்." if "ta" in preferred_language else "Sorry, I could not hear any speech clearly. Please try again or type your question."

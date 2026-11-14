@@ -6,31 +6,36 @@ import {
   Save, CheckCircle2, AlertCircle, Database, LogOut, Loader2 
 } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function Profile() {
   const { i18n } = useTranslation();
   const isTamil = i18n.language === 'ta';
   const navigate = useNavigate();
+  const { user, token, logout, updateUser } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState(null); // { type: 'success' | 'error', message: '' }
 
   const [formData, setFormData] = useState({
-    name: 'Arun Kumar',
-    mobile: '9876543210',
-    location: 'Coimbatore, Tamil Nadu',
-    farm_size: 3.5,
-    primary_crop: 'Paddy, Tomato',
-    preferred_language: 'ta',
+    name: user?.name || 'Farmer',
+    mobile: user?.mobile || '',
+    location: user?.location || 'Coimbatore, Tamil Nadu',
+    farm_size: user?.farm_size || 3.5,
+    primary_crop: user?.primary_crop || 'Paddy, Tomato',
+    preferred_language: user?.preferred_language || i18n.language || 'ta',
     notify_weather: true,
     notify_spray: true,
     notify_schemes: true
   });
 
-  const token = localStorage.getItem('agronex_token');
-
   useEffect(() => {
+    if (!token) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
     const fetchProfile = async () => {
       setLoading(true);
       try {
@@ -101,16 +106,9 @@ export default function Profile() {
         i18n.changeLanguage(formData.preferred_language);
       }
 
-      // Update local storage user profile name
-      const stored = localStorage.getItem('agronex_user');
-      if (stored) {
-        try {
-          const u = JSON.parse(stored);
-          u.name = updated.name || formData.name;
-          localStorage.setItem('agronex_user', JSON.stringify(u));
-        } catch {
-          // ignore
-        }
+      // Update global auth user profile name
+      if (updated.name || formData.name) {
+        updateUser({ name: updated.name || formData.name });
       }
 
       // Cache alert preferences for real-time notification filtering
@@ -136,9 +134,8 @@ export default function Profile() {
 
   const handleLogout = () => {
     if (window.confirm(isTamil ? 'கணக்கிலிருந்து வெளியேற விரும்புகிறீர்களா?' : 'Are you sure you want to log out?')) {
-      localStorage.removeItem('agronex_token');
-      localStorage.removeItem('agronex_user');
-      navigate('/login');
+      logout();
+      navigate('/login', { replace: true });
     }
   };
 

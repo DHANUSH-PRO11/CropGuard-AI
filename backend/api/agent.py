@@ -37,6 +37,7 @@ async def run_agent_workflow(
     longitude: Optional[float] = Form(None),
     language: Optional[str] = Form("en"),
     context: Optional[str] = Form(None),
+    local_transcription: Optional[str] = Form(None),
     db: Optional[Client] = Depends(get_supabase)
 ):
     """
@@ -76,8 +77,10 @@ async def run_agent_workflow(
         except Exception:
             parsed_context = {"raw_context": context}
 
+    effective_query = (query or "").strip() or (local_transcription or "").strip() or None
+
     result = agent.run(
-        query=query,
+        query=effective_query,
         image_bytes=image_bytes,
         image_filename=image_filename,
         audio_bytes=audio_bytes,

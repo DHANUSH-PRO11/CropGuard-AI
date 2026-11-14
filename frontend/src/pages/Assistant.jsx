@@ -98,6 +98,8 @@ export default function Assistant() {
   const nativeCameraInputRef = useRef(null);
   const videoRef = useRef(null);
   const cameraStreamRef = useRef(null);
+  const speechRecognitionRef = useRef(null);
+  const speechTranscriptRef = useRef('');
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -136,6 +138,10 @@ export default function Assistant() {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
+    }
+    if (speechRecognitionRef.current) {
+      try { speechRecognitionRef.current.stop(); } catch {}
+      speechRecognitionRef.current = null;
     }
   }
 
@@ -505,6 +511,32 @@ export default function Assistant() {
     setIsPaused(false);
     pcmBuffersRef.current = [];
     audioChunksRef.current = [];
+    speechTranscriptRef.current = '';
+
+    // Parallel client-side speech recognition for instantaneous resilience
+    if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+      try {
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const rec = new SpeechRec();
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.lang = i18n.language === 'ta' ? 'ta-IN' : 'en-IN';
+        rec.onresult = (e) => {
+          let full = '';
+          for (let i = 0; i < e.results.length; ++i) {
+            full += e.results[i][0].transcript + ' ';
+          }
+          if (full.trim()) {
+            speechTranscriptRef.current = full.trim();
+          }
+        };
+        rec.onerror = () => {};
+        rec.start();
+        speechRecognitionRef.current = rec;
+      } catch (recErr) {
+        console.warn("Client SpeechRecognition init notice:", recErr);
+      }
+    }
 
     // Pre-create AudioContext synchronously on user gesture to guarantee browser permission
     let preAudioCtx = null;
@@ -723,6 +755,32 @@ export default function Assistant() {
     }
     pcmBuffersRef.current = [];
     audioChunksRef.current = [];
+    speechTranscriptRef.current = '';
+
+    // Parallel client-side speech recognition for instantaneous resilience
+    if (typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+      try {
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const rec = new SpeechRec();
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.lang = i18n.language === 'ta' ? 'ta-IN' : 'en-IN';
+        rec.onresult = (e) => {
+          let full = '';
+          for (let i = 0; i < e.results.length; ++i) {
+            full += e.results[i][0].transcript + ' ';
+          }
+          if (full.trim()) {
+            speechTranscriptRef.current = full.trim();
+          }
+        };
+        rec.onerror = () => {};
+        rec.start();
+        speechRecognitionRef.current = rec;
+      } catch (recErr) {
+        console.warn("Client SpeechRecognition init notice:", recErr);
+      }
+    }
     setIsRecording(false);
     setIsPaused(false);
     setRecordedAudio(null);
@@ -921,6 +979,9 @@ export default function Assistant() {
         agentForm.append('audio', audioObj.file, audioObj.name || 'voice.webm');
         agentForm.append('image', photoToSend.file, photoToSend.name || 'leaf.jpg');
         agentForm.append('language', i18n.language || 'ta');
+        if (speechTranscriptRef.current) {
+          agentForm.append('local_transcription', speechTranscriptRef.current);
+        }
 
         const res = await fetch(`${apiUrl}/api/agent/run`, {
           method: 'POST',
@@ -942,6 +1003,9 @@ export default function Assistant() {
         const formData = new FormData();
         formData.append('file', audioObj.file, audioObj.name || 'voice.webm');
         formData.append('language', i18n.language || 'ta');
+        if (speechTranscriptRef.current) {
+          formData.append('local_transcription', speechTranscriptRef.current);
+        }
         if (initialContext) {
           formData.append('context', JSON.stringify(initialContext));
         }
@@ -963,10 +1027,11 @@ export default function Assistant() {
       }
       setCapturedPhoto(null);
 
-      if (data.transcription) {
+      const finalTranscript = data.transcription || speechTranscriptRef.current;
+      if (finalTranscript) {
         setMessages(prev => prev.map(msg => 
           msg.id === userMessageId 
-            ? { ...msg, transcription: data.transcription }
+            ? { ...msg, transcription: finalTranscript }
             : msg
         ));
       }

@@ -4,9 +4,11 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Leaf, Eye, EyeOff, Lock, Mail, User, ArrowRight, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { API_BASE_URL } from '../config/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
   const { t, i18n } = useTranslation();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -81,22 +83,19 @@ export default function Login() {
           });
           const loginData = await loginRes.json();
           if (loginData.access_token) {
-            localStorage.setItem('agronex_token', loginData.access_token);
-            localStorage.setItem('agronex_user', JSON.stringify(loginData.user || data));
+            login(loginData.user || data, loginData.access_token);
+          } else {
+            login(data, data.access_token || 'guest-token');
           }
         } catch (loginErr) {
           console.warn('Auto-login notice:', loginErr);
+          login(data, data.access_token || 'guest-token');
         }
       } else {
-        if (data.access_token) {
-          localStorage.setItem('agronex_token', data.access_token);
-        }
-        if (data.user) {
-          localStorage.setItem('agronex_user', JSON.stringify(data.user));
-        }
+        login(data.user, data.access_token);
       }
 
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     } catch (err) {
       console.error('Auth error:', err);
       setErrorMsg(err.message || 'An error occurred during authentication.');

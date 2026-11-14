@@ -48,6 +48,7 @@ async def voice_chat(
     file: UploadFile = File(...),
     language: Optional[str] = Form("ta"),
     context: Optional[str] = Form(None),
+    local_transcription: Optional[str] = Form(None),
     db: Optional[Client] = Depends(get_supabase)
 ):
     try:
@@ -81,7 +82,8 @@ async def voice_chat(
             filename=filename,
             preferred_language=language or "ta",
             content_type=file.content_type or "audio/wav",
-            context=parsed_context
+            context=parsed_context,
+            fallback_transcription=local_transcription
         )
 
         user_text = result.get("transcription") or "Farmer Voice Query"

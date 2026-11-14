@@ -1,11 +1,15 @@
-import { Outlet, NavLink, Link } from 'react-router-dom';
+import { Outlet, NavLink, Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Home, Leaf, Bot, CloudSun, Building, History, User, Languages } from 'lucide-react';
 import NotificationCenter from './NotificationCenter';
+import { useAuth } from '../context/AuthContext';
 
 export default function Layout() {
   const { t, i18n } = useTranslation();
+  const { user } = useAuth();
+  const location = useLocation();
   const isTamil = i18n.language === 'ta';
+  const isAuthPage = location.pathname.includes('/login') || location.pathname.includes('/register');
 
   const toggleLanguage = () => {
     const newLang = i18n.language === 'en' ? 'ta' : 'en';
@@ -87,33 +91,26 @@ export default function Layout() {
               <span>{i18n.language === 'en' ? 'தமிழ்' : 'English'}</span>
             </button>
 
-            {(() => {
-              const savedUser = localStorage.getItem('agronex_user');
-              const userObj = savedUser ? JSON.parse(savedUser) : null;
-              if (userObj) {
-                return (
-                  <div className="flex items-center gap-1.5">
-                    <Link
-                      to="/profile"
-                      className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-full text-xs font-semibold text-gray-700 transition-colors"
-                      title="Farmer Settings"
-                    >
-                      <User size={13} className="text-emerald-600" />
-                      <span className="truncate max-w-[80px] hidden sm:inline">{userObj.name || 'Farmer'}</span>
-                    </Link>
-                  </div>
-                );
-              }
-              return (
+            {user && !isAuthPage ? (
+              <div className="flex items-center gap-1.5">
                 <Link
-                  to="/login"
-                  className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-full hover:shadow-xs transition-all"
+                  to="/profile"
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-full text-xs font-semibold text-gray-700 transition-colors"
+                  title="Farmer Settings"
                 >
-                  <User size={13} />
-                  <span>{t('login')}</span>
+                  <User size={13} className="text-emerald-600" />
+                  <span className="truncate max-w-[80px] hidden sm:inline">{user.name || 'Farmer'}</span>
                 </Link>
-              );
-            })()}
+              </div>
+            ) : (
+              <Link
+                to="/login"
+                className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-full hover:shadow-xs transition-all"
+              >
+                <User size={13} />
+                <span>{t('login')}</span>
+              </Link>
+            )}
           </div>
         </div>
       </header>
