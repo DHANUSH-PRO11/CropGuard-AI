@@ -94,6 +94,7 @@ export default function Assistant() {
   const previewAudioRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const imageFileInputRef = useRef(null);
   const nativeCameraInputRef = useRef(null);
   const videoRef = useRef(null);
   const cameraStreamRef = useRef(null);
@@ -155,8 +156,79 @@ export default function Assistant() {
   };
 
   // ----------------------------------------------------
-  // Live Camera Functionality
+  // Camera & Image Attachment Handling
   // ----------------------------------------------------
+  const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB restriction
+
+  const formatFileSize = (bytes) => {
+    if (!bytes && bytes !== 0) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const processSelectedImage = (file) => {
+    if (!file) return false;
+
+    // Validate MIME type or file extension (JPEG, PNG, WebP)
+    const fileType = file.type?.toLowerCase();
+    const fileName = file.name?.toLowerCase() || '';
+    const isValidType = ALLOWED_IMAGE_TYPES.includes(fileType) || 
+      fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || 
+      fileName.endsWith('.png') || fileName.endsWith('.webp');
+
+    if (!isValidType) {
+      setErrorMsg(
+        i18n.language === 'ta'
+          ? 'தயவுசெய்து செல்லுபடியாகும் JPEG, PNG அல்லது WebP படத்தைத் தேர்ந்தெடுக்கவும்.'
+          : 'Please select a valid JPEG, PNG, or WebP image.'
+      );
+      return false;
+    }
+
+    // Validate size (10 MB upload restriction)
+    if (file.size > MAX_IMAGE_SIZE) {
+      setErrorMsg(
+        i18n.language === 'ta'
+          ? 'படத்தின் அளவு 10 MB-க்கு மிகாமல் இருக்க வேண்டும்.'
+          : 'Image file size must not exceed 10 MB.'
+      );
+      return false;
+    }
+
+    // Clean up previous blob URL if any
+    if (capturedPhoto?.url) {
+      URL.revokeObjectURL(capturedPhoto.url);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setCapturedPhoto({
+      file: file,
+      url: previewUrl,
+      name: file.name || `crop_leaf_${Date.now()}.jpg`,
+      size: file.size,
+    });
+
+    setErrorMsg(null);
+    closeLiveCamera();
+    return true;
+  };
+
+  const closeLiveCamera = () => {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach(t => {
+        try { t.stop(); } catch {}
+      });
+      cameraStreamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraOpen(false);
+    setCameraActive(false);
+  };
+
   const openLiveCamera = async (facing = cameraFacing) => {
     setErrorMsg(null);
     setIsCameraOpen(true);
@@ -164,14 +236,20 @@ export default function Assistant() {
 
     try {
       if (cameraStreamRef.current) {
-        cameraStreamRef.current.getTracks().forEach(t => t.stop());
+        cameraStreamRef.current.getTracks().forEach(t => {
+          try { t.stop(); } catch {}
+        });
         cameraStreamRef.current = null;
       }
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        // Fallback to native capture input if WebRTC camera is unavailable
-        setIsCameraOpen(false);
-        nativeCameraInputRef.current?.click();
+        closeLiveCamera();
+        setErrorMsg(
+          i18n.language === 'ta'
+            ? 'உங்கள் உலாவியில் நேரலை கேமரா வசதி இல்லை. புகைப்படத்தை பதிவேற்றவும்.'
+            : 'Webcam not supported in this browser. Please upload an image file.'
+        );
+        imageFileInputRef.current?.click();
         return;
       }
 
@@ -188,26 +266,40 @@ export default function Assistant() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.onloadedmetadata = () => {
-          videoRef.current.play().then(() => setCameraActive(true)).catch(() => setCameraActive(true));
+          videoRef.current?.play().then(() => setCameraActive(true)).catch(() => setCameraActive(true));
         };
       } else {
         setCameraActive(true);
       }
     } catch (err) {
-      console.warn("Live camera stream error, falling back to native camera:", err);
+      console.warn("Live camera stream error, falling back to image upload:", err);
       closeLiveCamera();
-      nativeCameraInputRef.current?.click();
+
+      const isPermissionDenied = err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError';
+      const isNotFound = err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError';
+
+      if (isPermissionDenied) {
+        setErrorMsg(
+          i18n.language === 'ta'
+            ? 'கேமரா அனுமதி மறுக்கப்பட்டது. தயவுசெய்து கேமரா அனுமதியை வழங்கவும் அல்லது படத்தைப் பதிவேற்றவும்.'
+            : 'Camera permission denied. Please allow camera access in browser settings or upload an image.'
+        );
+      } else if (isNotFound) {
+        setErrorMsg(
+          i18n.language === 'ta'
+            ? 'கேமரா எதுவும் கிடைக்கவில்லை. தயவுசெய்து புகைப்படத்தை பதிவேற்றவும்.'
+            : 'No camera device found. Please upload an image file.'
+        );
+      } else {
+        setErrorMsg(
+          i18n.language === 'ta'
+            ? 'கேமராவைத் தொடங்க முடியவில்லை. கோப்பிலிருந்து பதிவேற்றவும்.'
+            : 'Unable to start camera. Please upload an image directly.'
+        );
+      }
+      imageFileInputRef.current?.click();
     }
   };
-
-  function closeLiveCamera() {
-    if (cameraStreamRef.current) {
-      cameraStreamRef.current.getTracks().forEach(t => t.stop());
-      cameraStreamRef.current = null;
-    }
-    setIsCameraOpen(false);
-    setCameraActive(false);
-  }
 
   const switchCameraFacing = () => {
     const nextFacing = cameraFacing === 'environment' ? 'user' : 'environment';
@@ -233,27 +325,16 @@ export default function Assistant() {
     canvas.toBlob((blob) => {
       if (!blob) return;
       const file = new File([blob], `crop_leaf_${Date.now()}.jpg`, { type: 'image/jpeg' });
-      const url = URL.createObjectURL(blob);
-      setCapturedPhoto({
-        file: file,
-        url: url,
-        name: file.name,
-      });
-      closeLiveCamera();
+      processSelectedImage(file);
     }, 'image/jpeg', 0.92);
   };
 
   // Fallback / Native Camera File Capture
   const handleNativeCameraCapture = (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-
-    const url = URL.createObjectURL(file);
-    setCapturedPhoto({
-      file: file,
-      url: url,
-      name: file.name,
-    });
+    if (file) {
+      processSelectedImage(file);
+    }
     e.target.value = '';
   };
 
@@ -713,8 +794,11 @@ export default function Assistant() {
   };
 
   const processVoiceSubmission = async (audioObj) => {
+    if (isLoading) return;
     setErrorMsg(null);
     const userMessageId = Date.now();
+    const photoToSend = capturedPhoto;
+
     const newUserMessage = {
       id: userMessageId,
       type: 'user',
@@ -722,20 +806,18 @@ export default function Assistant() {
       isVoice: true,
       audioUrl: audioObj.url,
       fileName: audioObj.name,
-      imageUrl: capturedPhoto?.url,
+      imageUrl: photoToSend?.url,
     };
 
     setMessages(prev => [...prev, newUserMessage]);
     setInput('');
-    const photoToSend = capturedPhoto;
-    setCapturedPhoto(null);
     setIsLoading(true);
 
     try {
       let data = null;
 
       // If photo is also attached, invoke the unified multimodal AgroNex Copilot workflow
-      if (photoToSend) {
+      if (photoToSend && photoToSend.file) {
         const agentForm = new FormData();
         agentForm.append('audio', audioObj.file, audioObj.name || 'voice.webm');
         agentForm.append('image', photoToSend.file, photoToSend.name || 'leaf.jpg');
@@ -774,6 +856,12 @@ export default function Assistant() {
         }
         data = await res.json();
       }
+
+      // Success! Safely clear attachment and revoke blob URL
+      if (photoToSend?.url) {
+        URL.revokeObjectURL(photoToSend.url);
+      }
+      setCapturedPhoto(null);
 
       if (data.transcription) {
         setMessages(prev => prev.map(msg => 
@@ -822,6 +910,8 @@ export default function Assistant() {
 
   const handleSendText = async (e) => {
     if (e) e.preventDefault();
+    if (isLoading) return; // Prevent duplicate submissions
+
     const trimmedInput = input.trim();
     if (!trimmedInput && !capturedPhoto) return;
 
@@ -838,14 +928,13 @@ export default function Assistant() {
 
     setMessages(prev => [...prev, newUserMessage]);
     setInput('');
-    setCapturedPhoto(null);
     setIsLoading(true);
 
     try {
       let data = null;
 
       // 1. If photo is attached, execute the full multimodal AgroNex Copilot Agent
-      if (photoToSend) {
+      if (photoToSend && photoToSend.file) {
         const agentForm = new FormData();
         agentForm.append('image', photoToSend.file, photoToSend.name || 'leaf.jpg');
         if (trimmedInput) agentForm.append('query', trimmedInput);
@@ -888,6 +977,12 @@ export default function Assistant() {
         };
       }
 
+      // Success! Safely clear attachment and revoke blob URL
+      if (photoToSend?.url) {
+        URL.revokeObjectURL(photoToSend.url);
+      }
+      setCapturedPhoto(null);
+
       const aiMessageId = Date.now() + 1;
       const newAiMessage = {
         id: aiMessageId,
@@ -907,18 +1002,23 @@ export default function Assistant() {
 
     } catch (err) {
       console.error("API error:", err);
-      setErrorMsg("Failed to reach AgroNex assistant.");
+      setErrorMsg(
+        i18n.language === 'ta'
+          ? "அக்ரோநெக்ஸ் உதவியாளரைத் தொடர்பு கொள்ள முடியவில்லை. தயவுசெய்து சேவையகம் இயங்குகிறதா என சரிபார்க்கவும்."
+          : "Failed to reach AgroNex assistant. Please ensure backend is running."
+      );
       setMessages(prev => [
         ...prev,
         {
           id: Date.now() + 2,
           type: 'ai',
           text: i18n.language === 'ta'
-            ? "மன்னிக்கவும், சேவையகத்துடன் தொடர்புகொள்வதில் சிக்கல் ஏற்பட்டது."
+            ? "மன்னிக்கவும், சேவையகத்துடன் தொடர்புகொள்வதில் சிக்கல் ஏற்பட்டது. மீண்டும் முயற்சிக்கவும்."
             : "Sorry, could not connect to AgroNex assistant. Please ensure backend is running.",
           isError: true,
         }
       ]);
+      // Retain capturedPhoto on failure so user can retry!
     } finally {
       setIsLoading(false);
     }
@@ -1221,12 +1321,13 @@ export default function Assistant() {
             </div>
           </div>
 
-          {/* Bottom Bar: Shutter Button */}
+          {/* Bottom Bar: Shutter & Upload Buttons */}
           <div className="flex items-center justify-around py-3 z-10">
             <button
               type="button"
-              onClick={() => nativeCameraInputRef.current?.click()}
-              className="text-xs text-gray-300 hover:text-white flex flex-col items-center gap-1"
+              onClick={() => imageFileInputRef.current?.click()}
+              className="text-xs text-gray-300 hover:text-white flex flex-col items-center gap-1 transition-colors"
+              title={t('upload_image')}
             >
               <ImageIcon size={22} />
               <span>{t('upload_image')}</span>
@@ -1236,7 +1337,10 @@ export default function Assistant() {
             <button
               type="button"
               onClick={snapLivePhoto}
-              className="w-18 h-18 rounded-full border-4 border-white bg-agronex-primary hover:scale-105 active:scale-95 flex items-center justify-center shadow-2xl transition-transform"
+              disabled={!cameraActive}
+              className={`w-18 h-18 rounded-full border-4 border-white bg-agronex-primary flex items-center justify-center shadow-2xl transition-transform ${
+                cameraActive ? 'hover:scale-105 active:scale-95 cursor-pointer' : 'opacity-50 cursor-not-allowed'
+              }`}
               title="Snap Photo"
             >
               <div className="w-14 h-14 rounded-full bg-white/90"></div>
@@ -1245,7 +1349,8 @@ export default function Assistant() {
             <button
               type="button"
               onClick={closeLiveCamera}
-              className="text-xs text-gray-300 hover:text-white flex flex-col items-center gap-1"
+              className="text-xs text-gray-300 hover:text-white flex flex-col items-center gap-1 transition-colors"
+              title={t('cancel_recording')}
             >
               <X size={22} />
               <span>{t('cancel_recording')}</span>
@@ -1258,30 +1363,49 @@ export default function Assistant() {
       <div className="p-3 bg-white border-t border-gray-100">
         {/* Attached Photo Preview (Saved until entered and sent) */}
         {capturedPhoto && !isRecording && (
-          <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded-2xl flex items-center justify-between gap-3 animate-fadeIn">
-            <div className="flex items-center gap-3 overflow-hidden">
-              <div className="w-12 h-12 rounded-xl overflow-hidden bg-black/10 flex-shrink-0 border border-green-300">
-                <img src={capturedPhoto.url} alt="Crop Thumbnail" className="w-full h-full object-cover" />
+          <div className="mb-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 shadow-xs animate-fadeIn">
+            <div className="flex items-center gap-3 overflow-hidden min-w-0">
+              <div className="w-12 h-12 rounded-xl overflow-hidden bg-black/10 flex-shrink-0 border-2 border-emerald-300">
+                <img src={capturedPhoto.url} alt="Crop Leaf Thumbnail" className="w-full h-full object-cover" />
               </div>
-              <div className="overflow-hidden">
-                <div className="text-xs font-bold text-agronex-deep truncate">
+              <div className="overflow-hidden min-w-0">
+                <div className="text-xs font-bold text-gray-800 truncate" title={capturedPhoto.name}>
                   {capturedPhoto.name}
                 </div>
-                <div className="text-[11px] text-green-700 flex items-center gap-1 font-medium">
-                  <CheckCircle size={12} />
-                  <span>{i18n.language === 'ta' ? 'பயிர் புகைப்படம் இணைக்கப்பட்டது' : 'Crop leaf photo ready'}</span>
+                <div className="text-[11px] text-emerald-700 flex items-center gap-1.5 font-medium mt-0.5">
+                  <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">
+                    <CheckCircle size={10} className="text-emerald-600" />
+                    {i18n.language === 'ta' ? 'தயாராக உள்ளது' : 'Ready'}
+                  </span>
+                  {capturedPhoto.size ? (
+                    <span className="text-gray-500 text-[10px]">({formatFileSize(capturedPhoto.size)})</span>
+                  ) : null}
                 </div>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={removePhotoAttachment}
-              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors flex-shrink-0"
-              title="Remove photo"
-            >
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {/* Replace Image Action */}
+              <button
+                type="button"
+                onClick={() => imageFileInputRef.current?.click()}
+                className="px-2.5 py-1 text-xs font-medium text-emerald-700 bg-white hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors flex items-center gap-1 shadow-xs"
+                title={i18n.language === 'ta' ? 'படத்தை மாற்றவும்' : 'Replace Image'}
+              >
+                <RefreshCw size={12} />
+                <span>{i18n.language === 'ta' ? 'மாற்று' : 'Replace'}</span>
+              </button>
+
+              {/* Remove Attachment Action */}
+              <button
+                type="button"
+                onClick={removePhotoAttachment}
+                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title={i18n.language === 'ta' ? 'படத்தை நீக்கு' : 'Remove Image'}
+              >
+                <X size={16} />
+              </button>
+            </div>
           </div>
         )}
 
@@ -1369,12 +1493,27 @@ export default function Assistant() {
               className="hidden"
             />
 
+            {/* Hidden file input for image gallery / file picker */}
+            <input
+              type="file"
+              ref={imageFileInputRef}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  processSelectedImage(file);
+                }
+                e.target.value = '';
+              }}
+              accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+              className="hidden"
+            />
+
             {/* Hidden file input for native device camera fallback */}
             <input
               type="file"
               ref={nativeCameraInputRef}
               onChange={handleNativeCameraCapture}
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
               capture="environment"
               className="hidden"
             />
