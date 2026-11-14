@@ -416,7 +416,7 @@ export default function Assistant() {
     return new Blob([view], { type: 'audio/wav' });
   };
 
-  // Helper to generate finalized audio object (prefers pristine 16kHz WAV for Gnani AI compatibility)
+  // Helper to generate finalized audio object (prefers pristine 16kHz WAV for Sarvam AI compatibility)
   const generateFinalAudio = (durationSecs) => {
     if (pcmBuffersRef.current && pcmBuffersRef.current.length > 0) {
       const rate = sampleRateRef.current || audioCtxRef.current?.sampleRate || 48000;
@@ -536,7 +536,7 @@ export default function Assistant() {
           console.warn("AudioWorklet not available, using processor:", workletErr);
         }
 
-        // ScriptProcessor Fallback: guarantees 16kHz WAV capture for Gnani AI in all environments
+        // ScriptProcessor Fallback: guarantees 16kHz WAV capture for Sarvam AI in all environments
         if (!workletActive) {
           const processor = audioCtx.createScriptProcessor(4096, 1, 1);
           processor.onaudioprocess = (e) => {
@@ -1056,7 +1056,7 @@ export default function Assistant() {
             <h2 className="font-bold text-lg leading-tight flex items-center gap-2">
               {t('ask_ai_title')}
               <span className="text-xs bg-green-500/30 text-green-200 border border-green-400/30 px-2 py-0.5 rounded-full flex items-center gap-1">
-                <Sparkles size={10} /> Gnani AI Voice (Prisma & Timbre)
+                <Sparkles size={10} /> Sarvam AI Voice (Saaras & Bulbul)
               </span>
             </h2>
             <p className="text-green-100 text-xs">{t('ask_ai_subtitle')}</p>

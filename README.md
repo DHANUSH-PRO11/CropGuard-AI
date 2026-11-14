@@ -5,19 +5,19 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.103-009688.svg)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-19.2-61DAFB.svg)](https://react.dev)
 [![ONNX](https://img.shields.io/badge/ONNX-EfficientNetV2--S-blueviolet.svg)](https://onnxruntime.ai)
-[![Gnani AI](https://img.shields.io/badge/Gnani_AI-Prisma%20v3.0%20STT%20%7C%20Timbre%20v3.0%20TTS-0052CC.svg)](https://gnani.ai)
-[![Challenge](https://img.shields.io/badge/Gnani_AI-Great_Indian_AI_Internship_Challenge-FF9933.svg)](https://gnani.ai/internship)
+[![Sarvam AI](https://img.shields.io/badge/Sarvam_AI-105B%20Chat%20%7C%20Saaras%20STT%20%7C%20Bulbul%20TTS-0052CC.svg)](https://sarvam.ai)
+[![Event](https://img.shields.io/badge/Bharat_Agentic--AI-Code_for_a_Billion-FF9933.svg)](https://agentfoundry.me)
 [![Live Demo](https://img.shields.io/badge/Live_Demo-cropguard--ai--nu.vercel.app-000000?logo=vercel)](https://cropguard-ai-nu.vercel.app/)
 
-> **AgroNex Agent** is an autonomous, multimodal agricultural copilot built for Indian smallholder and commercial farmers. Built for the **Great Indian AI Internship Challenge 2026** powered by **Gnani AI's Prisma (STT)** & **Timbre (TTS)** voice models, it coordinates computer-vision crop disease detection, live micro-climate weather risk feeds, and bilingual voice reasoning (Tamil, Hindi, English) into an evidence-grounded action loop.
+> **AgroNex Agent** is an autonomous, multimodal agricultural copilot built for Indian smallholder and commercial farmers for the **Bharat Agentic-AI Hackathon: Code for a Billion**. Powered by **Sarvam AI's** multilingual models (**Sarvam-105B**, **Saaras v4 STT**, and **Bulbul v3 TTS**), it coordinates computer-vision crop disease detection, live micro-climate weather risk feeds, and bilingual vernacular reasoning (Tamil, Hindi, English) into an evidence-grounded action loop.
 >
 > 🌐 **Live App**: [https://cropguard-ai-nu.vercel.app/](https://cropguard-ai-nu.vercel.app/)  
-> 📄 **[Read 1-Page Solution Pitch for Gnani AI Challenge](SOLUTION_PITCH.md)**
+> 📄 **[Read 1-Page Solution Pitch](SOLUTION_PITCH.md)**
 >
-> **Executive Summary for Gnani AI Challenge:**
-> - **Voice-First Ingestion**: Hands-free vernacular voice input transcribed via **Gnani Prisma v3.0 STT** (`indic-auto` & conversational code-mixing).
+> **Executive Summary for Bharat Agentic-AI / Code for a Billion:**
+> - **Voice-First Ingestion**: Hands-free vernacular voice input transcribed via **Sarvam Saaras v4 STT** (`indic-auto` & conversational code-mixing).
 > - **Grounded Agricultural Loop**: 38-class EfficientNetV2-S ONNX leaf disease scanner coupled with real-time Open-Meteo weather spray safety gates.
-> - **Spoken Output Synthesis**: Actionable agronomic advice spoken aloud via **Gnani Timbre v3.0 TTS** in regional Indian voices (`Lakshmi`).
+> - **Spoken Output Synthesis**: Actionable agronomic advice spoken aloud via **Sarvam Bulbul v3 TTS** in natural regional Indian speech.
 
 ---
 
@@ -28,7 +28,7 @@ AgroNex transforms passive machine learning into an active **governed agent loop
 ```mermaid
 graph TD
     User["👨‍🌾 Farmer (Tamil / Hindi / English)"] -->|"Photo + Voice / Text + Location"| Ingestion["Node 1: Input Ingestion & Gatekeeper"]
-    Ingestion -->|"Voice Audio"| STT["Gnani AI Prisma v3.0 STT<br/>(Indic Auto-detect & Code-Mix)"]
+    Ingestion -->|"Voice Audio"| STT["Sarvam AI Saaras v4 STT<br/>(Indic Auto-detect & Code-Mix)"]
     Ingestion --> Router["Node 2: Adaptive Intent Router"]
     
     Router -->|"Leaf Photo"| VisionTool["Node 3: EfficientNetV2-S ONNX<br/>+ Quality Checks (Blur, Foliage, Light)"]
@@ -39,8 +39,8 @@ graph TD
     WeatherTool --> ContextAssembly
     SchemesTool --> ContextAssembly
     
-    ContextAssembly -->|"Grounded Context Packet"| ReasoningAgent["Node 6: Agricultural Reasoner<br/>(Anti-Hallucination & Spray Rules)"]
-    ReasoningAgent -->|"Actionable Text"| VoiceTTS["Node 7: Gnani AI Timbre v3.0 TTS<br/>(Natural Indic & Regional Voice)"]
+    ContextAssembly -->|"Grounded Context Packet"| ReasoningAgent["Node 6: Agricultural Reasoner<br/>(Sarvam-105B & Spray Rules)"]
+    ReasoningAgent -->|"Actionable Text"| VoiceTTS["Node 7: Sarvam AI Bulbul v3 TTS<br/>(Natural Indic & Regional Voice)"]
     ReasoningAgent --> CloudPersistence["Node 8: Supabase Storage & Postgres<br/>(Offline-Resilient Fallback)"]
     
     VoiceTTS --> Assembly["Node 9: AgroNex Output Assembly<br/>(Trace, Latency, Spray Advisory, Evidence)"]
@@ -55,14 +55,14 @@ graph TD
 The agentic pipeline is formally specified in [`workflows/agronex_agent_workflow.yaml`](workflows/agronex_agent_workflow.yaml) and [`.agentfoundry/workflow.json`](.agentfoundry/workflow.json):
 
 1. **Multimodal Ingestion**: Accepts farmer voice recordings, live camera snapshots, text prompts, and GPS coordinates.
-2. **Audio Transcription**: Powered by **Gnani AI Prisma v3.0 STT** (`indic-auto` & conversational code-mix mode) for natural spoken regional languages (Tamil, Hindi, etc.).
+2. **Audio Transcription**: Powered by **Sarvam AI Saaras v4 STT** (`indic-auto` & conversational code-mix mode) for natural spoken regional languages (Tamil, Hindi, etc.).
 3. **Adaptive Tool Routing**: Dynamically decides whether computer vision, meteorological lookup, or knowledge retrieval is required.
 4. **Computer Vision Inference**: EfficientNetV2-S ONNX model with EXIF correction, blur Laplacian variance filtering, overexposure clipping detection, and minimum foliage ratios.
 5. **Real-time Meteorological Feed**: Open-Meteo live forecast (24-hour hourly temperatures, rainfall amounts, wind speeds, and 7-day outlook).
 6. **Spray Window Risk Gate**: Automatically evaluates whether upcoming rain (>60% probability or >2mm) or high winds (>25 km/h) make pesticide/fertilizer spraying unsafe.
 7. **Uncertainty Gatekeeper**: If model confidence is `<60%` or image quality fails, the agent flags the observation and instructs the farmer to seek extension officer confirmation.
-8. **Bilingual Agricultural Reasoning**: Prompt-grounded reasoning model synthesizes evidence into clear, direct advice, emphasizing organic remedies and cultural sanitation first.
-9. **Speech Synthesis**: Powered by **Gnani AI Timbre v3.0 TTS** to generate natural spoken voice audio in Indian regional languages (e.g. `ta-IN`, `hi-IN`, `en-IN`).
+8. **Bilingual Agricultural Reasoning**: Prompt-grounded reasoning model (Sarvam-105B) synthesizes evidence into clear, direct advice, emphasizing organic remedies and cultural sanitation first.
+9. **Speech Synthesis**: Powered by **Sarvam AI Bulbul v3 TTS** to generate natural spoken voice audio in Indian regional languages (e.g. `ta-IN`, `hi-IN`, `en-IN`).
 10. **Evidence & Cloud Persistence**: Saves the analysis and trace to Supabase (`crop_analyses`, `chat_history`), operating in graceful offline fallback if cloud credentials are not supplied.
 
 ---
@@ -148,7 +148,7 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 cp .env.example .env
-# Edit .env and insert your GNANI_API_KEY (from app.gnani.ai) and SARVAM_API_KEY
+# Edit .env and insert your SARVAM_API_KEY (from sarvam.ai)
 
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
@@ -174,8 +174,7 @@ docker compose up --build
 
 | Variable | Scope | Description | Required? |
 | :--- | :--- | :--- | :--- |
-| `GNANI_API_KEY` | Backend | **Gnani AI Vachana Key** for **Prisma v3.0 STT** & **Timbre v3.0 TTS** (Great Indian AI Challenge) | **Yes** (Voice Pipeline) |
-| `SARVAM_API_KEY` | Backend | Agricultural reasoning and fallback voice engine | Optional |
+| `SARVAM_API_KEY` | Backend | **Sarvam AI API Key** for **Sarvam-105B chat**, **Saaras v4 STT**, and **Bulbul v3 TTS** | **Yes** (AI & Voice Pipeline) |
 | `SUPABASE_URL` | Backend | Supabase Project URL (`https://xyz.supabase.co`) | Optional (Graceful fallback) |
 | `SUPABASE_PUBLISHABLE_KEY` | Backend | Supabase Anon / Service Role key | Optional (Graceful fallback) |
 | `FRONTEND_URL` | Backend | Frontend URL for CORS (default: `http://localhost:5173`) | Optional |

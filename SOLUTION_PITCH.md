@@ -1,7 +1,6 @@
-
 "🌾 AgroNex: Autonomous Vernacular Voice Copilot for Indian Farmers"
 
-"Hands-free multimodal agricultural advisory fusing real-time computer vision disease detection, live micro-climate spray windows, and Gnani AI speech intelligence in regional languages."
+"Hands-free multimodal agricultural advisory fusing real-time computer vision disease detection, live micro-climate spray windows, and Sarvam AI multilingual intelligence in regional languages."
 
 ---
 
@@ -9,7 +8,7 @@
 
 - "Live Application": https://cropguard-ai-nu.vercel.app/
 - "GitHub Repository": https://github.com/DHANUSH-PRO11/CropGuard-AI
-- "Developer": Dhanush G | "Built for Gnani AI Great Indian AI Internship Challenge 2026"
+- "Developer": Dhanush G | "Built for Bharat Agentic-AI Hackathon: Code for a Billion"
 
 ---
 
@@ -19,22 +18,23 @@ Over 140 million Indian smallholder farmers lose "15% to 30% of their crop yield
 
 "2. Proposed Solution & Core Workflow"
 
-AgroNex delivers an autonomous, voice-driven agricultural copilot built specifically for rural and Tier-2/3 farming communities. A farmer snaps a photo of an infected leaf and speaks a query in Tamil, Hindi, or conversational code-mix (e.g., Tanglish/Hinglish). AgroNex transcribes the audio via "Gnani Prisma v3.0 STT", validates leaf quality, executes ONNX neural disease inference, and pulls live Open-Meteo forecasts to enforce spray safety windows (blocking sprays if rain >60% or winds >25 km/h). The synthesized, safe advisory is then read aloud in natural regional speech using "Gnani Timbre v3.0 TTS".
+AgroNex delivers an autonomous, voice-driven agricultural copilot built specifically for rural and Tier-2/3 farming communities. A farmer snaps a photo of an infected leaf and speaks a query in Tamil, Hindi, or conversational code-mix (e.g., Tanglish/Hinglish). AgroNex transcribes the audio via "Sarvam AI Saaras v4 STT", validates leaf quality, executes ONNX neural disease inference, and pulls live Open-Meteo forecasts to enforce spray safety windows (blocking sprays if rain >60% or winds >25 km/h). The synthesized, safe advisory is reasoned by "Sarvam-105B" and then read aloud in natural regional speech using "Sarvam AI Bulbul v3 TTS".
 
 "3. Architecture & Tech Stack"
 
 - "Frontend / UI": React 19, Vite, Tailwind CSS v4, Lucide Icons, bilingual i18n (Tamil & English), responsive mobile-first PWA design.
 - "Backend & Services": FastAPI (Python 3.11/3.12), RESTful endpoints, asynchronous streaming, Uvicorn ASGI server.
 - "AI / Speech / ML Models":
-  - "Gnani AI Prisma v3.0 STT": Automatic Indic language detection (`indic-auto`) and conversational code-mix speech transcription.
-  - "Gnani AI Timbre v3.0 TTS": Neural speech synthesis for regional audio playback (`Lakshmi` voice).
+  - "Sarvam AI Saaras v4 STT": Automatic Indic language detection (`indic-auto`) and conversational code-mix speech transcription.
+  - "Sarvam-105B Conversational Model": Large-scale Indian agricultural reasoning copilot.
+  - "Sarvam AI Bulbul v3 TTS": Natural neural speech synthesis for regional audio playback (`ta-IN`, `hi-IN`, `en-IN`).
   - "EfficientNetV2-S (ONNX Runtime)": 38-class PlantVillage crop disease classifier with Laplacian blur and foliage quality gates.
   - "Agricultural Knowledge Reasoner": Grounded anti-hallucination recommendation engine with PM-KISAN subsidy matching.
 - "Data & Integrations": Open-Meteo Micro-climate API, Supabase Cloud Storage & Postgres with zero-setup resilient local SQLite fallback.
 
 "4. Key Features & Novelty"
 
-- "Voice-First Vernacular Inclusion": Hands-free voice interface tailored for farmers in regional dialects and code-mixes using Gnani AI's proprietary speech models.
+- "Voice-First Vernacular Inclusion": Hands-free voice interface tailored for farmers in regional dialects and code-mixes using Sarvam AI's speech models.
 - "Automated Weather Spray Safety Gate": Prevents expensive pesticide wastage and chemical run-off by checking real-time rainfall and wind thresholds before advising sprays.
 - "Uncertainty & Quality Gatekeeping": Eliminates hallucinations by rejecting blurry/non-foliage photos and flagging predictions below 60% confidence for KVK extension officer review.
 - "Offline & Low-Bandwidth Resilience": Seamlessly operates with local SQLite caching when network connectivity drops in remote fields.
@@ -44,7 +44,7 @@ AgroNex delivers an autonomous, voice-driven agricultural copilot built specific
 ```bash
 # 1. Backend Setup & Run (Terminal 1)
 pip install -r backend/requirements.txt
-echo "GNANI_API_KEY=your_gnani_key" > backend/.env
+echo "SARVAM_API_KEY=your_sarvam_key" > backend/.env
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload --app-dir backend
 
 # 2. Frontend Setup & Run (Terminal 2)

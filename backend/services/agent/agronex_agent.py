@@ -77,10 +77,7 @@ class AgroNexAgent:
         detected_audio_lang = None
 
         if audio_bytes and len(audio_bytes) > 0:
-            gnani_key = getattr(self.assistant, "gnani_api_key", None)
-            is_gnani = isinstance(gnani_key, str) and bool(gnani_key.strip())
-            stt_tool_name = "gnani_prisma_speech_to_text" if is_gnani else "sarvam_speech_to_text"
-            tools_called.append(stt_tool_name)
+            tools_called.append("sarvam_speech_to_text")
             try:
                 detected_audio_lang, transcription = self.assistant.speech_to_text(
                     audio_bytes=audio_bytes,
@@ -347,10 +344,7 @@ class AgroNexAgent:
         node_start = time.perf_counter()
         audio_base64 = None
         try:
-            gnani_key = getattr(self.assistant, "gnani_api_key", None)
-            is_gnani = isinstance(gnani_key, str) and bool(gnani_key.strip())
-            tts_tool_name = "gnani_timbre_tts" if is_gnani else "sarvam_bulbul_tts"
-            tools_called.append(tts_tool_name)
+            tools_called.append("sarvam_bulbul_tts")
             tts_lang = "ta-IN" if language == "ta" else "en-IN"
             audio_base64 = self.assistant.text_to_speech(response_text, language_code=tts_lang)
             log_node(

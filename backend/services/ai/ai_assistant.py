@@ -36,39 +36,29 @@ class AIAssistant:
         load_dotenv(dotenv_path=base_dir / ".env")
         load_dotenv(dotenv_path=base_dir / "backend" / ".env")
 
-        self.gnani_api_key = os.environ.get("GNANI_API_KEY")
         self.api_key = os.environ.get("SARVAM_API_KEY")
 
         for candidate in [base_dir / ".env", base_dir / "backend" / ".env"]:
             if candidate.exists():
                 for line in candidate.read_text(encoding="utf-8").splitlines():
                     line = line.strip()
-                    if not self.gnani_api_key and line.startswith("GNANI_API_KEY="):
-                        val = line.split("=", 1)[1].strip().strip('"').strip("'")
-                        if val:
-                            self.gnani_api_key = val
                     if not self.api_key and line.startswith("SARVAM_API_KEY="):
                         val = line.split("=", 1)[1].strip().strip('"').strip("'")
                         if val:
                             self.api_key = val
 
-        # Fallback key for serverless Vercel deployment if dashboard env vars are not set
-        if not self.gnani_api_key:
-            self.gnani_api_key = "vach_1ytE2CY5X2EB7Rx1KDRLPVPvNvl19OVWCDOgHImeYU5SSVXaOHx6i3opg0s53mYN5WjUEZ5wfabFGsbJKjOTfYDWReZUIqCC_a78315d638d083ac6d676c5f402d056b"
-
-        if self.gnani_api_key:
-            logger.info("Gnani AI voice models (Prisma STT & Timbre TTS) active.")
-
         if self.api_key and SarvamAI is not None:
             self.client = SarvamAI(api_subscription_key=self.api_key)
+            logger.info("Sarvam AI client initialized successfully.")
         else:
             self.client = None
             if not SarvamAI:
                 logger.warning("sarvamai package is not installed; AI assistant features will operate in fallback mode.")
-
+            elif not self.api_key:
+                logger.warning("SARVAM_API_KEY is not configured; AI assistant will operate in fallback mode.")
 
     def clean_for_tts(self, text: str, max_chars: int = 220) -> str:
-        """Strip markdown/emoji symbols and summarize to a crisp spoken length for fast Timbre TTS."""
+        """Strip markdown/emoji symbols and summarize to a crisp spoken length for natural Sarvam Bulbul TTS."""
         # Remove markdown tokens, bullets, and emoji/pictograph ranges while preserving Tamil/ASCII punctuation
         clean = re.sub(r'[*_~`#•🌾🎤📷🤖⚠️✅🌱💧☀️]+', ' ', text)
         clean = re.sub(r'^\s*(?:[-+*]|\d+\.)\s+', '', clean, flags=re.MULTILINE)
@@ -508,78 +498,11 @@ class AIAssistant:
             logger.error(f"Error in chat completion: {e}")
             return self._generate_fallback_response(question, language, context)
 
-    def _gnani_speech_to_text(self, audio_bytes: bytes, filename: str = "audio.wav", content_type: str = "audio/wav") -> tuple[str, str]:
-        """
-        Transcribes speech using Gnani AI's Prisma v3.0 model (REST API).
-        Supports indic-auto language identification and conversational code-mixing.
-        """
-        if not self.gnani_api_key:
-            raise RuntimeError("GNANI_API_KEY is not configured.")
-
-        url = "https://api.vachana.ai/stt/v3"
-        headers = {
-            "X-API-Key-ID": self.gnani_api_key
-        }
-        files = {
-            "audio_file": (filename, io.BytesIO(audio_bytes), content_type)
-        }
-        data = {
-            "model": "prisma-v3.0",
-            "language_code": "indic-auto"
-        }
-        logger.info(f"Calling Gnani AI Prisma v3 STT ({filename}, {len(audio_bytes)} bytes)")
-        resp = requests.post(url, headers=headers, files=files, data=data, timeout=30)
-        if resp.status_code != 200:
-            raise RuntimeError(f"Gnani Prisma STT returned HTTP {resp.status_code}: {resp.text}")
-
-        res_json = resp.json()
-        transcript = res_json.get("transcript", "").strip()
-        detected_lang = res_json.get("detected_language_code") or "ta-IN"
-        logger.info(f"Gnani Prisma STT success. Lang: {detected_lang}, Transcript: '{transcript}'")
-        return detected_lang, transcript
-
-    def _gnani_text_to_speech(self, text: str, language_code: str = "ta-IN") -> str | None:
-        """
-        Synthesizes natural spoken regional speech using Gnani AI's Timbre v3.0 model.
-        Returns base64 encoded WAV audio string.
-        """
-        if not self.gnani_api_key:
-            return None
-
-        url = "https://api.vachana.ai/api/v1/tts/inference"
-        headers = {
-            "X-API-Key-ID": self.gnani_api_key,
-            "Content-Type": "application/json"
-        }
-        clean_text = self.clean_for_tts(text)
-        # Match Gnani supported regional locale codes
-        valid_langs = ["ta-IN", "hi-IN", "en-IN", "kn-IN", "te-IN", "ml-IN", "mr-IN", "gu-IN", "bn-IN", "pa-IN"]
-        tts_lang = language_code if language_code in valid_langs else "ta-IN"
-
-        payload = {
-            "text": clean_text,
-            "voice": "Lakshmi",
-            "model": "timbre-v3.0",
-            "language": tts_lang,
-            "speed": 1.0,
-            "audio_config": {
-                "encoding": "linear_pcm",
-                "container": "wav",
-                "num_channels": 1,
-                "sample_rate": 16000,
-                "sample_width": 2
-            }
-        }
-        logger.info(f"Calling Gnani AI Timbre v3 TTS ({tts_lang}, {len(clean_text)} chars)")
-        resp = requests.post(url, headers=headers, json=payload, timeout=15)
-        if resp.status_code == 200 and resp.content:
-            logger.info(f"Gnani Timbre TTS success ({len(resp.content)} audio bytes received)")
-            return base64.b64encode(resp.content).decode("utf-8")
-        else:
-            logger.warning(f"Gnani Timbre TTS failed ({resp.status_code}): {resp.text}")
-            return None
-
     def speech_to_text(self, audio_bytes: bytes, filename: str = "audio.wav", content_type: str = "audio/wav") -> tuple[str, str]:
+        """
+        Transcribes vernacular spoken audio using Sarvam AI Saaras v4 STT.
+        Supports automatic Indian language identification and conversational code-mixing.
+        """
         # Ensure filename has an appropriate extension
         if "." not in filename:
             filename = f"{filename}.wav"
@@ -599,16 +522,9 @@ class AIAssistant:
             else:
                 content_type = "audio/wav"
 
-        # 1. Primary: Gnani AI Prisma STT (Great Indian AI Challenge)
-        if self.gnani_api_key:
-            try:
-                return self._gnani_speech_to_text(audio_bytes, filename=filename, content_type=content_type)
-            except Exception as e:
-                logger.warning(f"Gnani Prisma STT error: {e}. Checking fallback provider.")
-
-        # 2. Secondary: Sarvam AI Saaras v4 STT
+        # Sarvam AI Saaras v4 STT
         if self.client:
-            logger.info(f"Calling Sarvam STT with file: {filename}, size: {len(audio_bytes)} bytes, mime: {content_type}")
+            logger.info(f"Calling Sarvam STT (Saaras v4) with file: {filename}, size: {len(audio_bytes)} bytes, mime: {content_type}")
             response = self.client.speech_to_text.transcribe(
                 file=(filename, io.BytesIO(audio_bytes), content_type),
                 model="saaras:v4",
@@ -620,24 +536,21 @@ class AIAssistant:
             logger.info(f"Sarvam STT success. Detected lang: {detected_lang}, Transcript: '{transcript}'")
             return detected_lang, transcript
 
-        raise RuntimeError("No STT client (Gnani AI or Sarvam AI) is configured.")
+        raise RuntimeError("Sarvam AI STT client is not configured (SARVAM_API_KEY missing).")
 
     def text_to_speech(self, text: str, language_code: str = "ta-IN") -> str | None:
+        """
+        Synthesizes natural regional speech using Sarvam AI Bulbul v3 TTS.
+        Returns base64 encoded audio string (WAV).
+        """
         clean_text = self.clean_for_tts(text)
 
-        # 1. Primary: Gnani AI Timbre TTS (Great Indian AI Challenge)
-        if self.gnani_api_key:
-            try:
-                audio = self._gnani_text_to_speech(clean_text, language_code=language_code)
-                if audio:
-                    return audio
-            except Exception as e:
-                logger.warning(f"Gnani Timbre TTS error: {e}. Checking fallback provider.")
-
-        # 2. Secondary: Sarvam AI Bulbul v3 TTS
+        # Sarvam AI Bulbul v3 TTS
         if self.client:
             try:
-                tts_lang = language_code if language_code in ["ta-IN", "en-IN", "hi-IN", "te-IN", "kn-IN", "ml-IN"] else "ta-IN"
+                valid_langs = ["ta-IN", "en-IN", "hi-IN", "te-IN", "kn-IN", "ml-IN", "mr-IN", "gu-IN", "bn-IN", "pa-IN", "od-IN"]
+                tts_lang = language_code if language_code in valid_langs else "ta-IN"
+                logger.info(f"Calling Sarvam TTS (Bulbul v3) ({tts_lang}, {len(clean_text)} chars)")
                 response = self.client.text_to_speech.convert(
                     text=clean_text,
                     language_code=tts_lang,
@@ -645,6 +558,7 @@ class AIAssistant:
                     output_audio_codec="wav",
                 )
                 if response and response.audios and len(response.audios) > 0:
+                    logger.info(f"Sarvam Bulbul TTS success ({len(response.audios[0])} base64 chars)")
                     return response.audios[0]
             except Exception as e:
                 logger.error(f"Sarvam TTS conversion failed: {e}")
