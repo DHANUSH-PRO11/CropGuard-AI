@@ -121,5 +121,94 @@ class WeatherAlertService:
                     "start": storm_time,
                     "source": "Open-Meteo forecast"
                 })
+
+        # 3. IMD Heavy Rainfall Risk (Cumulative 24h)
+        total_24h_rain = sum(precips[start_idx:check_hours]) if precips else 0
+        if total_24h_rain >= 64.5:
+            alerts.append({
+                "type": "heavy_rain",
+                "level": "HIGH",
+                "title_en": "IMD Heavy Rain Alert (Drainage Critical)",
+                "title_ta": "கனமழை எச்சரிக்கை (வடிகால் வசதி அவசியம்)",
+                "message_en": f"Heavy rainfall ({total_24h_rain:.1f} mm) forecast within 24h. Postpone all pesticide/fertilizer spraying, hold irrigation, and open drainage channels.",
+                "message_ta": f"அடுத்த 24 மணி நேரத்தில் கனமழை ({total_24h_rain:.1f} மி.மீ) கணிக்கப்பட்டுள்ளது. மருந்து தெளிப்பதை ஒத்திவைத்து வடிகால் வசதியை உறுதி செய்யவும்.",
+                "source": "Open-Meteo forecast"
+            })
+        elif total_24h_rain >= 35.0:
+            alerts.append({
+                "type": "moderate_rain",
+                "level": "CAUTION",
+                "title_en": "Moderate-to-Heavy Rain Caution",
+                "title_ta": "மிதமான/கனமழை எச்சரிக்கை",
+                "message_en": f"Accumulated rain ({total_24h_rain:.1f} mm) expected. Hold irrigation to conserve water and prevent waterlogging.",
+                "message_ta": f"மழைப்பொழிவு ({total_24h_rain:.1f} மி.மீ) எதிர்பார்க்கப்படுகிறது. நீர்ப்பாசனத்தை நிறுத்தி வைக்கவும்.",
+                "source": "Open-Meteo forecast"
+            })
+
+        # 4. Wind Gust Hazard (Spray Drift & Stalk Lodging)
+        max_gust = max(wind_gusts[start_idx:check_hours]) if wind_gusts else 0
+        if max_gust >= 50.0:
+            alerts.append({
+                "type": "strong_wind",
+                "level": "HIGH",
+                "title_en": "Severe Gale Wind Hazard",
+                "title_ta": "கடுமையான பலத்த காற்று எச்சரிக்கை",
+                "message_en": f"Wind gusts reaching {max_gust:.1f} km/h. Do not spray chemicals. Stake banana, sugarcane, and tall horticultural crops to prevent lodging.",
+                "message_ta": f"காற்றின் வேகம் {max_gust:.1f} கி.மீ/மணி வரை வீசக்கூடும். மருந்து தெளிக்க வேண்டாம். வாழை, கரும்பு போன்ற பயிர்களுக்கு முட்டுக் கொடுக்கவும்.",
+                "source": "Open-Meteo forecast"
+            })
+        elif max_gust >= 40.0:
+            alerts.append({
+                "type": "strong_wind",
+                "level": "CAUTION",
+                "title_en": "High Wind Spray Drift Warning",
+                "title_ta": "பலத்த காற்று - தெளிப்பு எச்சரிக்கை",
+                "message_en": f"Wind gusts up to {max_gust:.1f} km/h will cause severe spray drift and chemical loss. Postpone foliar spraying.",
+                "message_ta": f"காற்றின் வேகம் {max_gust:.1f} கி.மீ/மணி வரை உள்ளதால் மருந்து காற்றில் அடித்துச் செல்லப்படும். தெளிப்பதைத் தவிர்க்கவும்.",
+                "source": "Open-Meteo forecast"
+            })
+
+        # 5. Agronomic Disease Risk Indicators (Hutton Criteria & Micro-Climate Pathologies)
+        crop_lower = (crop or "").lower()
+        rh_90_hours = sum(1 for i in range(start_idx, check_hours) if humidities and humidities[i] >= 90)
+        rh_85_hours = sum(1 for i in range(start_idx, check_hours) if humidities and humidities[i] >= 85)
+        min_temp = min(temps[start_idx:check_hours]) if temps else 25.0
+        max_temp = max(temps[start_idx:check_hours]) if temps else 30.0
+
+        # Late Blight Risk (Tomato/Potato: Hutton/Smith criteria - min temp >= 10C and RH >= 90% for >= 6 hours)
+        if ("tomato" in crop_lower or "potato" in crop_lower) and min_temp >= 10.0 and rh_90_hours >= 6:
+            alerts.append({
+                "type": "disease_risk",
+                "level": "WARNING",
+                "title_en": "Late Blight Environmental Risk (Hutton Criteria)",
+                "title_ta": "இலைக்கருகல் நோய் சுற்றுச்சூழல் அபாயம்",
+                "message_en": f"High humidity ({rh_90_hours}h above 90% RH) and mild temperatures ({min_temp:.1f}°C) favor Late Blight spore sporulation. Inspect lower canopy leaves.",
+                "message_ta": f"அதிக ஈரப்பதம் ({rh_90_hours} மணிநேரம் >90%) இலைக்கருகல் பூஞ்சை பரவுவதற்கு சாதகமாக உள்ளது. இலைகளின் அடிப்பகுதியை ஆய்வு செய்யவும்.",
+                "source": "Hutton Disease Risk Model"
+            })
+
+        # Blast Risk for Paddy / Rice (RH >= 85% for >= 8 hours and temp 20-30C)
+        if ("paddy" in crop_lower or "rice" in crop_lower or "நெல்" in crop_lower) and 20.0 <= min_temp <= 30.0 and rh_85_hours >= 8:
+            alerts.append({
+                "type": "disease_risk",
+                "level": "WARNING",
+                "title_en": "Paddy Blast Fungal Threat Indicator",
+                "title_ta": "நெல் குலை நோய் சாதக எச்சரிக்கை",
+                "message_en": f"Prolonged leaf wetness ({rh_85_hours}h above 85% RH) creates optimal conditions for Pyricularia oryzae (Blast). Monitor leaf tips for spindle spots.",
+                "message_ta": f"தொடர் ஈரப்பதம் குலை நோய் பரவ வாய்ப்பளிக்கிறது. இலை நுனிகளில் கண் வடிவ புள்ளிகள் உள்ளதா என கண்காணிக்கவும்.",
+                "source": "Rice Blast Epidemiological Rule"
+            })
+
+        # Heat Stress (Tomato/Paddy flowering vulnerability at > 35C)
+        if max_temp >= 35.0:
+            alerts.append({
+                "type": "heat_stress",
+                "level": "CAUTION",
+                "title_en": "Crop Heat Stress Alert",
+                "title_ta": "பயிர் வெப்ப அலை எச்சரிக்கை",
+                "message_en": f"High temperature peak of {max_temp:.1f}°C. Provide light afternoon irrigation to mitigate flower and fruit drop.",
+                "message_ta": f"அதிகபட்ச வெப்பநிலை {max_temp:.1f}°C ஐ எட்டுகிறது. பூ மற்றும் பிஞ்சு உதிர்வதைத் தடுக்க மாலையில் லேசான பாசனம் செய்யவும்.",
+                "source": "Open-Meteo forecast"
+            })
                 
         return alerts

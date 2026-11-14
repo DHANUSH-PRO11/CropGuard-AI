@@ -99,6 +99,33 @@ def init_local_db():
                 created_at TEXT NOT NULL
             );
             """)
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS copilot_consultations (
+                id TEXT PRIMARY KEY,
+                user_id TEXT,
+                crop_type TEXT,
+                detected_disease TEXT,
+                confidence REAL,
+                quality_status TEXT,
+                requires_expert_confirmation INTEGER DEFAULT 0,
+                weather_summary TEXT,
+                spray_advisory TEXT,
+                recommendation_text TEXT,
+                created_at TEXT NOT NULL
+            );
+            """)
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                id TEXT PRIMARY KEY,
+                event_type TEXT NOT NULL,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                status TEXT NOT NULL,
+                payload TEXT,
+                created_at TEXT NOT NULL
+            );
+            """)
     finally:
         conn.close()
 
@@ -371,5 +398,83 @@ def clear_chat_history(user_id: Optional[str] = None) -> bool:
             return True
     finally:
         conn.close()
+
+
+# --- Copilot Unified Consultations (Predictions + Weather + Recommendations + Uncertainty) ---
+def save_copilot_consultation(record: Dict[str, Any]) -> str:
+    """Persists a complete grounded agricultural copilot consultation bundle."""
+    conn = get_connection()
+    rec_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        with conn:
+            conn.execute("""
+            INSERT INTO copilot_consultations (
+                id, user_id, crop_type, detected_disease, confidence, quality_status,
+                requires_expert_confirmation, weather_summary, spray_advisory, recommendation_text, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                rec_id,
+                record.get("user_id"),
+                record.get("crop_type", "Unknown"),
+                record.get("detected_disease", "Unknown"),
+                float(record.get("confidence", 0.0)),
+                record.get("quality_status", "Passed"),
+                1 if record.get("requires_expert_confirmation") else 0,
+                record.get("weather_summary", ""),
+                record.get("spray_advisory", ""),
+                record.get("recommendation_text", ""),
+                now
+            ))
+        return rec_id
+    finally:
+        conn.close()
+
+def get_recent_copilot_consultations(limit: int = 20) -> List[Dict[str, Any]]:
+    """Retrieves recent unified copilot consultations with prediction, weather & uncertainty data."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM copilot_consultations ORDER BY created_at DESC LIMIT ?", (limit,))
+        return [dict(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+# --- Automation Notifications History ---
+def save_notification(record: Dict[str, Any]) -> str:
+    """Records an automation notification dispatch (n8n, webhook, audit)."""
+    conn = get_connection()
+    rec_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        with conn:
+            conn.execute("""
+            INSERT INTO notifications (id, event_type, title, message, channel, status, payload, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                rec_id,
+                record.get("event_type", "GENERAL"),
+                record.get("title", ""),
+                record.get("message", ""),
+                record.get("channel", "local_audit"),
+                record.get("status", "delivered"),
+                record.get("payload", "{}"),
+                now
+            ))
+        return rec_id
+    finally:
+        conn.close()
+
+def get_recent_notifications(limit: int = 50) -> List[Dict[str, Any]]:
+    """Retrieves recent automated notification events."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM notifications ORDER BY created_at DESC LIMIT ?", (limit,))
+        return [dict(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
 
 

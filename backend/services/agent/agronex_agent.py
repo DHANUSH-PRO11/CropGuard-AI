@@ -7,6 +7,7 @@ Sarvam AI Conversational Reasoning, and Supabase Persistence into an AgentFoundr
 import io
 import os
 import time
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
@@ -363,7 +364,7 @@ class AgroNexAgent:
             log_node("voice_synthesis", "failed", {"error": str(e)}, (time.perf_counter() - node_start) * 1000)
 
         # ---------------------------------------------------------
-        # Node 8: Cloud Persistence (Supabase if available)
+        # Node 8: Cloud Persistence & Automation Notifications
         # ---------------------------------------------------------
         node_start = time.perf_counter()
         db = db_client or get_supabase()
@@ -386,6 +387,10 @@ class AgroNexAgent:
                     {"role": "user", "message": effective_query},
                     {"role": "ai", "message": response_text}
                 ]).execute()
+
+                db.table("recommendations").insert({
+                    "recommendation_text": response_text
+                }).execute()
                 persisted = True
             except Exception as e:
                 persistence_error = str(e)
@@ -404,10 +409,43 @@ class AgroNexAgent:
                 })
             local_db.save_chat_message("user", effective_query)
             local_db.save_chat_message("ai", response_text)
+
+            # Record unified prediction, weather context, recommendation and uncertainty flag
+            local_db.save_copilot_consultation({
+                "crop_type": crop_prediction.get("crop", "General Farm") if crop_prediction else "General Farm",
+                "detected_disease": crop_prediction.get("condition", "General Inquiry") if crop_prediction else "General Inquiry",
+                "confidence": float(crop_prediction.get("confidence", 0.0)) if crop_prediction else 1.0,
+                "quality_status": crop_prediction.get("quality_status", "Passed") if crop_prediction else "N/A",
+                "requires_expert_confirmation": requires_expert_confirmation,
+                "weather_summary": json.dumps(weather_data.get("current", {}) if weather_data else {}, ensure_ascii=False),
+                "spray_advisory": spray_advisory,
+                "recommendation_text": response_text
+            })
             if not persisted:
                 persisted = True
         except Exception as e:
             logger.warning(f"Local DB persistence fallback error: {e}")
+
+        # Automation notification dispatch (n8n / webhook) on high-risk weather or disease alerts
+        try:
+            from services.notification_service import NotificationService
+            notifier = NotificationService()
+            if "DO NOT SPRAY" in spray_advisory or (weather_data and weather_data.get("alerts")):
+                notifier.notify_spray_advisory(
+                    spray_advisory=spray_advisory,
+                    crop=crop_prediction.get("crop", "Field Crop") if crop_prediction else "Field Crop"
+                )
+                tools_called.append("n8n_automation_notifications")
+            elif crop_prediction and requires_expert_confirmation:
+                notifier.dispatch_alert(
+                    event_type="DISEASE_ALERT",
+                    title="⚠️ Crop Disease Observation (Uncertain)",
+                    message=f"Possible {crop_prediction.get('condition')} detected on {crop_prediction.get('crop')}. Verification with KVK extension officer recommended.",
+                    metadata={"crop": crop_prediction.get("crop"), "condition": crop_prediction.get("condition")}
+                )
+                tools_called.append("n8n_automation_notifications")
+        except Exception as notif_err:
+            logger.debug(f"Automated notification dispatch: {notif_err}")
 
         backend_used = "supabase" if (db is not None and not persistence_error and persisted) else ("sqlite_fallback" if persisted else "none")
         node_status = "completed" if (persisted and not persistence_error and db is not None) else ("offline_fallback" if persisted else "error")

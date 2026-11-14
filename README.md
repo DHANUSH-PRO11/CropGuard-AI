@@ -225,6 +225,10 @@ npm run build
 | `POST` | `/api/agent/run` | Multimodal Copilot: accepts `query`, `image`, `audio`, `latitude`, `longitude`, `language`. Returns full grounded recommendation, spray advisory, audio base64, and execution trace. |
 | `POST` | `/api/agent/chat` | Fast JSON copilot chat with contextual grounding and weather evaluation. |
 | `GET` | `/api/agent/workflow`| Returns AgentFoundry workflow manifest and active node status. |
+| `GET` | `/api/agent/history` | Retrieves recorded copilot consultations (disease predictions, real-time weather context, spray advisories, recommendations, and uncertainty flags). |
+| `GET` | `/api/notifications/status` | Queries live status of supported automation channels (n8n webhook, generic webhook, local audit). |
+| `POST` | `/api/notifications/dispatch` | Dispatches agricultural alerts (weather risk, spray hazards, disease alerts) to n8n / automation channels. |
+| `GET` | `/api/notifications/history` | Retrieves automated notification dispatch audit history. |
 | `POST` | `/api/crops/analyze` | Direct EfficientNetV2 inference on uploaded plant leaf. |
 | `GET` | `/api/crops/history` | Retrieves historical analysis records with confidence and risk classification. |
 | `DELETE`| `/api/crops/history/{id}` | Deletes an analysis record from SQLite / Supabase database. |
@@ -253,10 +257,14 @@ npm run build
 ## 🏆 Hackathon Submission Details
 
 - **Event**: Code for a Billion – Bharat Agentic-AI Hackathon 2026
+- **Project**: AgroNex Agent — AI Copilot for Farmers
 - **Organizer**: Code for India (CFI) in partnership with NASSCOM / SSC FutureSkills Prime
 - **Platform**: AgentFoundry (`agentfoundry.me`)
 - **Workflow ID**: `agronex-farming-copilot`
-- **License**: Apache-2.0 Open Source
+- **Supported Automation Channels**: n8n Webhook Workflow (`workflows/n8n_agronex_notification_workflow.json`)
+- **Technology Stack**: Python + FastAPI; EfficientNet-V2 ONNX; React 19 + Vite; Open-Meteo Weather API; Supabase & SQLite Fallback; n8n Automation; AgentFoundry Workflow Manifest.
+- **Responsible Implementation Note**: AI visual outputs are strictly treated as probabilistic predictions, not medical/diagnostic certainty. Chemical spraying is gated by rainfall/wind velocity thresholds, and low-confidence predictions are explicitly escalated to human agronomists (KVK extension officers).
+- **License**: Apache-2.0 Open Source (see [LICENSE](LICENSE))
 
 ---
 

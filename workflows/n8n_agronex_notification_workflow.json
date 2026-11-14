@@ -1,0 +1,214 @@
+{
+  "name": "AgroNex Agent — Farmer Notification Automation Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "agronex-alerts",
+        "options": {}
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "id": "node_webhook_trigger"
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.body.event_type }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "WEATHER_RISK",
+              "outputKey": "weather_risk"
+            },
+            {
+              "value2": "SPRAY_ADVISORY",
+              "outputKey": "spray_advisory"
+            },
+            {
+              "value2": "DISEASE_ALERT",
+              "outputKey": "disease_alert"
+            },
+            {
+              "value2": "DAILY_COPILOT_BRIEF",
+              "outputKey": "daily_brief"
+            }
+          ]
+        }
+      },
+      "name": "Route by Alert Category",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [480, 300],
+      "id": "node_switch_router"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.whatsapp.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.WHATSAPP_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "to",
+              "value": "={{ $json.body.mobile }}"
+            },
+            {
+              "name": "type",
+              "value": "text"
+            },
+            {
+              "name": "text",
+              "value": "={ \"body\": \"🚨 *AGRONEX WEATHER RISK ALERT*\\n\\n\" + $json.body.title + \"\\n\\n\" + $json.body.message + \"\\n\\n_Stay safe and protect your crops._\" }"
+            }
+          ]
+        }
+      },
+      "name": "Send WhatsApp Weather Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [760, 160],
+      "id": "node_whatsapp_weather"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.sms-gateway.in/v2/send",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "mobile",
+              "value": "={{ $json.body.mobile }}"
+            },
+            {
+              "name": "sender_id",
+              "value": "AGRONX"
+            },
+            {
+              "name": "message",
+              "value": "={{ '🌾 AgroNex Spray Advisory: ' + $json.body.message }}"
+            }
+          ]
+        }
+      },
+      "name": "Send SMS Spray Hazard Advisory",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [760, 280],
+      "id": "node_sms_spray"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_AGRONOMIST_CHANNEL_ID }}",
+        "text": "={{ '🌾 *AGRONEX UNCERTAINTY ESCALATION*\\nFarmer: ' + $json.body.farmer_id + '\\n' + $json.body.title + '\\n' + $json.body.message + '\\n\\n_Flagged for KVK extension officer physical inspection._' }}",
+        "additionalFields": {
+          "parse_mode": "Markdown"
+        }
+      },
+      "name": "Notify KVK Agronomist Channel (Telegram)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [760, 400],
+      "id": "node_telegram_kvk"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"status\": \"dispatched\", \"event\": $json.body.event_type, \"processed_at\": $now } }}"
+      },
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1020, 300],
+      "id": "node_response"
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Route by Alert Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Alert Category": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Weather Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send SMS Spray Hazard Advisory",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notify KVK Agronomist Channel (Telegram)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp Weather Alert": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send SMS Spray Hazard Advisory": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify KVK Agronomist Channel (Telegram)": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
+

@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from api import crops, assistant, profile, auth, weather, schemes
+from api import crops, assistant, profile, auth, weather, schemes, notifications
 from api.agent import router as agent_router
 import os
 app = FastAPI(title="AgroNex API", description="Smart Farming Backend with Autonomous Copilot Agent", version="1.0.0")
@@ -40,6 +40,7 @@ app.include_router(assistant.router, prefix="/api/assistant", tags=["AI Assistan
 app.include_router(weather.router, prefix="/api/weather", tags=["Weather"])
 app.include_router(schemes.router, prefix="/api/schemes", tags=["Schemes"])
 app.include_router(profile.router, prefix="/api/profile", tags=["Profile"])
+app.include_router(notifications.router)
 
 
 @app.get("/")

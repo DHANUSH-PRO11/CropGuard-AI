@@ -60,7 +60,7 @@ export default function Login() {
       let data = {};
       try {
         data = await response.json();
-      } catch (err) {
+      } catch {
         data = { detail: response.statusText || 'Server error occurred during authentication.' };
       }
 

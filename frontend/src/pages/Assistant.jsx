@@ -104,16 +104,6 @@ export default function Assistant() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading, isRecording, isPaused, capturedPhoto]);
 
-  // Clean up recording, camera & audio on unmount
-  useEffect(() => {
-    return () => {
-      cleanupAudioRecording();
-      closeLiveCamera();
-      if (audioPlayerRef.current) audioPlayerRef.current.pause();
-      if (previewAudioRef.current) previewAudioRef.current.pause();
-    };
-  }, []);
-
 
 
   function cleanupAudioRecording() {
@@ -228,6 +218,16 @@ export default function Assistant() {
     setIsCameraOpen(false);
     setCameraActive(false);
   };
+
+  // Clean up recording, camera & audio on unmount
+  useEffect(() => {
+    return () => {
+      cleanupAudioRecording();
+      closeLiveCamera();
+      if (audioPlayerRef.current) audioPlayerRef.current.pause();
+      if (previewAudioRef.current) previewAudioRef.current.pause();
+    };
+  }, []);
 
   const openLiveCamera = async (facing = cameraFacing) => {
     setErrorMsg(null);
@@ -478,7 +478,7 @@ export default function Assistant() {
       let stream = null;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      } catch (e1) {
+      } catch {
         stream = await navigator.mediaDevices.getUserMedia({
           audio: { autoGainControl: true }
         });
@@ -836,7 +836,8 @@ export default function Assistant() {
           detected_language: agentRes.language,
           audio_base64: agentRes.audio_base64,
           cropAnalysis: agentRes.crop_prediction,
-          sprayAdvisory: agentRes.spray_advisory
+          sprayAdvisory: agentRes.spray_advisory,
+          requires_expert_confirmation: agentRes.requires_expert_confirmation
         };
       } else {
         const formData = new FormData();
@@ -880,6 +881,7 @@ export default function Assistant() {
         audioBase64: data.audio_base64,
         cropAnalysis: data.cropAnalysis || null,
         sprayAdvisory: data.sprayAdvisory || null,
+        requires_expert_confirmation: data.requires_expert_confirmation || false,
       };
 
       setMessages(prev => [...prev, newAiMessage]);
@@ -951,7 +953,8 @@ export default function Assistant() {
           reply: result.recommendation,
           audio_base64: result.audio_base64,
           cropAnalysis: result.crop_prediction,
-          sprayAdvisory: result.spray_advisory
+          sprayAdvisory: result.spray_advisory,
+          requires_expert_confirmation: result.requires_expert_confirmation
         };
       } else {
         // Standard chat with context grounding
@@ -991,6 +994,7 @@ export default function Assistant() {
         audioBase64: data.audio_base64,
         cropAnalysis: data.cropAnalysis || null,
         sprayAdvisory: data.sprayAdvisory || null,
+        requires_expert_confirmation: data.requires_expert_confirmation || false,
       };
 
       setMessages(prev => [...prev, newAiMessage]);
@@ -1161,15 +1165,17 @@ export default function Assistant() {
 
               {/* Show transcription if available */}
               {msg.transcription && (
-                <div className="mb-1.5 text-xs bg-white/20 px-2.5 py-1.5 rounded-lg text-green-50 italic">
-                  <span className="font-semibold not-italic">🗣️ {t('transcribed')}: </span>
+                <div className={`mb-1.5 text-xs px-2.5 py-1.5 rounded-lg italic ${
+                  msg.type === 'user' ? 'bg-white/20 text-green-50' : 'bg-gray-100 text-gray-700 border border-gray-200'
+                }`}>
+                  <span className="font-semibold not-italic">🗣️ {t('transcribed') || 'Transcribed'}: </span>
                   "{msg.transcription}"
                 </div>
               )}
 
               {/* Crop Analysis Badge if returned by AI */}
               {msg.cropAnalysis && (
-                <div className="mb-2 p-3 bg-green-50 border border-green-200 rounded-xl text-gray-800 space-y-1.5">
+                <div className="mb-2 p-3 bg-green-50 border border-green-200 rounded-xl text-gray-800 space-y-1.5 shadow-2xs">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-agronex-deep flex items-center gap-1.5 text-xs">
                       {msg.cropAnalysis.is_healthy ? (
@@ -1188,6 +1194,45 @@ export default function Assistant() {
                     <span><strong>Status:</strong> {msg.cropAnalysis.status}</span>
                     <span>•</span>
                     <span><strong>Severity:</strong> {msg.cropAnalysis.severity || 'Moderate'}</span>
+                    {msg.cropAnalysis.quality_status && (
+                      <>
+                        <span>•</span>
+                        <span><strong>Quality:</strong> {msg.cropAnalysis.quality_status}</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Responsible AI & Uncertainty Notice */}
+                  {(msg.requires_expert_confirmation || msg.cropAnalysis.status === 'Uncertain' || (msg.cropAnalysis.quality_status && msg.cropAnalysis.quality_status !== 'Passed')) && (
+                    <div className="mt-1.5 p-2 bg-amber-50/90 border border-amber-200/80 rounded-lg text-[11px] text-amber-900 flex items-start gap-1.5 leading-snug">
+                      <AlertCircle size={14} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                      <span>
+                        {i18n.language === 'ta'
+                          ? 'கவனிக்க: இது மாதிரி அடிப்படையிலான முன்கணிப்பு மட்டுமே. ரசாயன மருந்துகளைப் பயன்படுத்துவதற்கு முன் வேளாண் அறிவியல் நிலைய (KVK) அதிகாரியிடம் உறுதிப்படுத்தவும்.'
+                          : 'Responsible AI Notice: Model output is an automated prediction, not a definitive diagnosis. Consult your local KVK agricultural extension officer before chemical treatments.'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Weather Risk & Spray Window Feasibility Advisory */}
+              {msg.sprayAdvisory && (
+                <div className={`mb-2 p-2.5 rounded-xl border text-xs flex items-start gap-2 shadow-2xs ${
+                  msg.sprayAdvisory.includes('DO NOT SPRAY') 
+                    ? 'bg-red-50 border-red-200 text-red-900' 
+                    : msg.sprayAdvisory.includes('CAUTION')
+                    ? 'bg-amber-50 border-amber-200 text-amber-900'
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                }`}>
+                  <span className="text-base flex-shrink-0">
+                    {msg.sprayAdvisory.includes('DO NOT SPRAY') ? '🌧️' : msg.sprayAdvisory.includes('CAUTION') ? '💨' : '🌤️'}
+                  </span>
+                  <div className="flex-grow">
+                    <div className="font-bold text-[10px] uppercase tracking-wider text-gray-700">
+                      {i18n.language === 'ta' ? 'வானிலை & தெளிப்பு இடர் வழிகாட்டல்' : 'Weather Risk & Spray Window'}
+                    </div>
+                    <div className="text-[11px] mt-0.5 font-medium leading-tight">{msg.sprayAdvisory}</div>
                   </div>
                 </div>
               )}
@@ -1253,13 +1298,15 @@ export default function Assistant() {
         {/* Quick prompt suggestions when only welcome message */}
         {messages.length === 1 && !isRecording && !isPaused && (
           <div className="pt-2">
-            <p className="text-xs text-gray-400 mb-2 font-medium">💡 Try asking, speaking, or snapping a crop photo:</p>
+            <p className="text-xs text-gray-500 mb-2 font-medium">
+              {i18n.language === 'ta' ? '💡 பயிர் புகைப்படம், குரல் அல்லது கேள்வியைக் கேட்கவும்:' : '💡 Try asking, speaking, or snapping a crop photo:'}
+            </p>
             <div className="flex flex-wrap gap-2">
               {quickPrompts.map((prompt, idx) => (
                 <button
                   key={idx}
                   onClick={() => sendQuickPrompt(prompt)}
-                  className="text-xs text-gray-600 bg-white border border-gray-200 hover:border-agronex-primary hover:text-agronex-primary px-3 py-1.5 rounded-full transition-colors text-left"
+                  className="text-xs text-gray-600 bg-white border border-gray-200 hover:border-agronex-primary hover:text-agronex-primary px-3 py-1.5 rounded-full transition-colors text-left shadow-2xs cursor-pointer"
                 >
                   {prompt}
                 </button>

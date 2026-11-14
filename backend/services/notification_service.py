@@ -149,3 +149,4 @@ class NotificationService:
             mobile=farmer_mobile,
             metadata={"crop": crop, "spray_advisory": spray_advisory, "is_hazard": is_hazard}
         )
+

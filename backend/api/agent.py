@@ -138,3 +138,21 @@ def get_workflow_manifest():
             "Human agronomist verification required if confidence < 60%"
         ]
     }
+
+@router.get("/history")
+def get_consultation_history(limit: int = 20):
+    """
+    Retrieves recorded copilot consultations containing disease predictions,
+    real-time weather context, spray advisories, recommendations, and uncertainty flags.
+    """
+    try:
+        from config import local_db
+        records = local_db.get_recent_copilot_consultations(limit=limit)
+        return {
+            "success": True,
+            "count": len(records),
+            "consultations": records
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch consultation records: {e}")
+
