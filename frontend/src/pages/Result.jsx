@@ -44,7 +44,11 @@ export default function Result() {
     );
   }
 
-  const { crop, condition, confidence, is_healthy, top_predictions, status, quality_status, warning_message } = result;
+  const { 
+    crop, condition, confidence, is_healthy, top_predictions, 
+    alternative_predictions, symptoms, cultural_control,
+    status, quality_status, warning_message 
+  } = result;
   const confPercent = (confidence * 100).toFixed(1);
   const isUncertain = status === "Uncertain" || confidence < 0.60;
   const formattedCondition = (condition || '').replace(/_/g, ' ');
@@ -214,26 +218,50 @@ export default function Result() {
             </div>
           )}
 
-          {/* Actionable Recommendations Checklist */}
+          {/* Symptoms & Disease Explanation */}
+          {symptoms && (
+            <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200/80 text-xs space-y-1.5 shadow-2xs">
+              <span className="font-extrabold text-emerald-900 flex items-center gap-1.5 text-xs">
+                <Activity size={14} className="text-emerald-700" />
+                <span>{isTamil ? "அறிகுறிகள் & கள விளக்கம்" : "Symptoms & Disease Characteristics"}</span>
+              </span>
+              <p className="text-gray-700 leading-relaxed text-xs">
+                {symptoms}
+              </p>
+            </div>
+          )}
+
+          {/* Actionable Recommendations Checklist & Cultural Control */}
           <div>
             <h3 className="font-bold text-sm text-agronex-deep mb-2 font-display">
-              {t('what_to_do')}
+              {isTamil ? "பரிந்துரைக்கப்பட்ட விவசாய மேலாண்மை முறைகள்" : "Cultural Control & Practical Steps"}
             </h3>
             <div className="space-y-2 bg-gray-50 p-4 rounded-2xl border border-gray-100 text-xs text-gray-700">
-              <div className="flex items-start gap-2.5">
-                <CheckCircle size={15} className="text-emerald-600 mt-0.5 flex-shrink-0" />
-                <span>
-                  {is_healthy 
-                    ? "Maintain standard drip irrigation and scheduled balanced fertilizer intervals." 
-                    : "Isolate heavily affected foliage to prevent spore dispersal to adjacent plants."}
-                </span>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <CheckCircle size={15} className="text-emerald-600 mt-0.5 flex-shrink-0" />
-                <span>
-                  Check regional rainfall forecast below before applying any protective spray.
-                </span>
-              </div>
+              {cultural_control && cultural_control.length > 0 ? (
+                cultural_control.map((step, idx) => (
+                  <div key={idx} className="flex items-start gap-2.5">
+                    <CheckCircle size={15} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+                    <span className="leading-relaxed">{step}</span>
+                  </div>
+                ))
+              ) : (
+                <>
+                  <div className="flex items-start gap-2.5">
+                    <CheckCircle size={15} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+                    <span>
+                      {is_healthy 
+                        ? "Maintain standard drip irrigation and scheduled balanced fertilizer intervals." 
+                        : "Isolate heavily affected foliage to prevent spore dispersal to adjacent plants."}
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <CheckCircle size={15} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+                    <span>
+                      Check regional rainfall forecast below before applying any protective spray.
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

@@ -13,11 +13,15 @@ export default function History() {
   const navigate = useNavigate();
 
   const [records, setRecords] = useState([]);
+  const [consultations, setConsultations] = useState([]);
+  const [activeTab, setActiveTab] = useState('SCANS'); // 'SCANS' | 'CONSULTATIONS'
   const [loading, setLoading] = useState(true);
+  const [consultationsLoading, setConsultationsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('ALL'); // ALL, HEALTHY, DISEASED, UNCERTAIN
   const [selectedRecord, setSelectedRecord] = useState(null);
+  const [selectedConsultation, setSelectedConsultation] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
   const fetchHistory = useCallback(async () => {
@@ -35,12 +39,28 @@ export default function History() {
     }
   }, []);
 
+  const fetchConsultations = useCallback(async () => {
+    setConsultationsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/agent/history?limit=40`);
+      if (res.ok) {
+        const data = await res.json();
+        setConsultations(data.consultations || []);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch consultations history:', err);
+    } finally {
+      setConsultationsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       fetchHistory();
+      fetchConsultations();
     }, 0);
     return () => clearTimeout(timer);
-  }, [fetchHistory]);
+  }, [fetchHistory, fetchConsultations]);
 
   const handleDelete = async (id, e) => {
     e.stopPropagation();
@@ -109,8 +129,6 @@ export default function History() {
   const totalScans = records.length;
   const healthyCount = records.filter((r) => r.is_healthy || (r.condition && r.condition.toLowerCase().includes('healthy'))).length;
   const diseasedCount = totalScans - healthyCount;
-  const highConfCount = records.filter((r) => (r.confidence || 0) >= 0.7).length;
-  const highConfRate = totalScans > 0 ? Math.round((highConfCount / totalScans) * 100) : 100;
 
   return (
     <div className="space-y-6 pb-12">
@@ -155,10 +173,45 @@ export default function History() {
         </div>
         <div className="bg-white p-4 rounded-2xl border border-blue-100 shadow-2xs">
           <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider block mb-1">
-            {isTamil ? 'உயர் நம்பிக்கை விகிதம்' : 'High Confidence'}
+            {isTamil ? 'ஆலோசகர் பதிவுகள்' : 'Copilot Sessions'}
           </span>
-          <p className="text-2xl font-black text-blue-700 font-display">{highConfRate}%</p>
+          <p className="text-2xl font-black text-blue-700 font-display">{consultations.length}</p>
         </div>
+      </div>
+
+      {/* Dual Tab Switcher: Scans vs Full Multimodal Consultations */}
+      <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-2xl w-fit">
+        <button
+          type="button"
+          onClick={() => setActiveTab('SCANS')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeTab === 'SCANS'
+              ? 'bg-white text-emerald-800 shadow-xs'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <HistoryIcon size={14} />
+          <span>{isTamil ? 'பயிர் இலை ஸ்கேன்கள்' : 'Crop Leaf Diagnoses'}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+            {records.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('CONSULTATIONS')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeTab === 'CONSULTATIONS'
+              ? 'bg-white text-emerald-800 shadow-xs'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <Sparkles size={14} className="text-amber-500" />
+          <span>{isTamil ? 'AI ஆலோசகர் வழிகாட்டல்கள்' : 'Saved Consultations'}</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold">
+            {consultations.length}
+          </span>
+        </button>
       </div>
 
       {/* Search & Status Filters */}
@@ -204,8 +257,157 @@ export default function History() {
         </div>
       </div>
 
-      {/* History Records List */}
-      {loading ? (
+      {/* History Records or Consultations List */}
+      {activeTab === 'CONSULTATIONS' ? (
+        consultationsLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="bg-white p-5 rounded-2xl border border-gray-100 animate-pulse space-y-3">
+                <div className="h-5 bg-gray-200 rounded-md w-1/2"></div>
+                <div className="h-4 bg-gray-100 rounded-md w-3/4"></div>
+                <div className="h-10 bg-gray-50 rounded-xl"></div>
+              </div>
+            ))}
+          </div>
+        ) : consultations.length === 0 ? (
+          <div className="bg-white rounded-3xl border border-gray-200/80 p-10 text-center space-y-4">
+            <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+              <Sparkles size={28} />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-gray-800 text-base">
+                {isTamil ? 'ஆலோசகர் பதிவுகள் எதுவும் இல்லை' : 'No Copilot Consultations Yet'}
+              </h3>
+              <p className="text-xs text-gray-500 max-w-md mx-auto mt-1">
+                {isTamil
+                  ? 'பயிர் பாதுகாப்பு வழிகாட்டல் மற்றும் தெளிப்பு நேர ஆலோசனைகளை பெற AI உதவியாளரிடம் பேசுங்கள்.'
+                  : 'Start an interaction in the AI Assistant to automatically record weather-integrated agricultural advisories.'}
+              </p>
+            </div>
+            <Link
+              to="/assistant"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition-all"
+            >
+              <span>{isTamil ? 'உதவியாளரைத் தொடங்குக' : 'Open AI Assistant'}</span>
+              <ArrowRight size={14} />
+            </Link>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {consultations.map((c, idx) => {
+              const formattedDate = c.created_at ? new Date(c.created_at).toLocaleDateString(isTamil ? 'ta-IN' : 'en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              }) : 'Recent';
+
+              let weatherObj = {};
+              try {
+                if (typeof c.weather_summary === 'string') weatherObj = JSON.parse(c.weather_summary || '{}');
+                else if (typeof c.weather_summary === 'object') weatherObj = c.weather_summary || {};
+              } catch {}
+
+              const isSprayWarning = (c.spray_advisory || '').toLowerCase().includes('not spray') || (c.spray_advisory || '').toLowerCase().includes('hazard');
+
+              return (
+                <div
+                  key={c.id || `c-${idx}`}
+                  onClick={() => setSelectedConsultation(c)}
+                  className="bg-white rounded-2xl border border-gray-200/80 p-5 shadow-2xs hover:shadow-md hover:border-emerald-300 transition-all flex flex-col justify-between space-y-3 cursor-pointer group"
+                >
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span className="text-xs font-extrabold text-gray-900 group-hover:text-emerald-700 transition-colors">
+                          {c.crop_type}
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-medium text-gray-400 flex items-center gap-1">
+                        <Calendar size={12} />
+                        <span>{formattedDate}</span>
+                      </span>
+                    </div>
+
+                    <div>
+                      <h4 className="text-base font-extrabold text-gray-900 leading-snug">
+                        {c.detected_disease}
+                      </h4>
+                      {c.requires_expert_confirmation === 1 && (
+                        <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                          <AlertTriangle size={11} /> {isTamil ? 'KVK கள சரிபார்ப்பு தேவை' : 'KVK Verification Advised'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Weather & Spray Badges */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      {weatherObj.temperature !== undefined && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-gray-100 text-gray-700">
+                          {weatherObj.temperature}°C • {weatherObj.wind_speed} km/h wind
+                        </span>
+                      )}
+                      {c.spray_advisory && (
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border ${
+                          isSprayWarning 
+                            ? 'bg-red-50 border-red-200 text-red-800' 
+                            : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        }`}>
+                          {c.spray_advisory}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Excerpt of Recommendation */}
+                    <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed bg-gray-50/70 p-2.5 rounded-xl border border-gray-100">
+                      {c.recommendation_text}
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedConsultation(c);
+                      }}
+                      className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1.5"
+                    >
+                      <Eye size={14} />
+                      <span>{isTamil ? 'முழு ஆலோசனை' : 'Read Full Advice'}</span>
+                    </button>
+
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate('/assistant', {
+                          state: {
+                            initialQuery: isTamil
+                              ? `${c.crop_type} ${c.detected_disease} பற்றிய எனது முந்தைய ஆலோசனையின் தொடர்ச்சி:`
+                              : `Follow-up on my previous consultation for ${c.crop_type} with ${c.detected_disease}:`,
+                            context: {
+                              crop: c.crop_type,
+                              condition: c.detected_disease,
+                              confidence: c.confidence,
+                              status: c.quality_status
+                            }
+                          }
+                        });
+                      }}
+                      className="text-xs font-bold text-gray-600 hover:text-blue-700 flex items-center gap-1 px-2.5 py-1 bg-gray-50 hover:bg-blue-50 rounded-lg transition-colors"
+                    >
+                      <MessageSquare size={13} />
+                      <span>{isTamil ? 'தொடர் கேள்வி' : 'Ask Follow-up'}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
+      ) : (
+      /* Scans List */
+      loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="bg-white p-5 rounded-2xl border border-gray-100 animate-pulse space-y-3">
@@ -353,7 +555,7 @@ export default function History() {
             );
           })}
         </div>
-      )}
+      ))}
 
       {/* Detailed Modal View */}
       {selectedRecord && (
@@ -412,6 +614,91 @@ export default function History() {
               </button>
               <button
                 onClick={() => setSelectedRecord(null)}
+                className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold"
+              >
+                {isTamil ? 'மூடு' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Detailed Consultation Modal View */}
+      {selectedConsultation && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-xl border border-gray-100 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200/60">
+                  {selectedConsultation.crop_type}
+                </span>
+                <h3 className="text-xl font-extrabold text-gray-900 mt-1 font-display">
+                  {selectedConsultation.detected_disease}
+                </h3>
+                <span className="text-[11px] text-gray-400">
+                  {selectedConsultation.created_at ? new Date(selectedConsultation.created_at).toLocaleString() : ''}
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedConsultation(null)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {selectedConsultation.spray_advisory && (
+              <div className="p-3 bg-blue-50/80 border border-blue-200/80 rounded-xl text-xs text-blue-900">
+                <strong className="block mb-0.5 font-bold">{isTamil ? 'தெளிப்பு வழிகாட்டல்:' : 'Spray Advisory:'}</strong>
+                <span>{selectedConsultation.spray_advisory}</span>
+              </div>
+            )}
+
+            <div className="bg-[#F8FAF9] p-4 rounded-2xl border border-gray-100 space-y-2">
+              <span className="text-xs font-bold text-gray-700 block">
+                {isTamil ? 'AI விவசாய ஆலோசனைகள்:' : 'Agricultural Copilot Guidance:'}
+              </span>
+              <p className="text-xs text-gray-800 leading-relaxed whitespace-pre-line">
+                {selectedConsultation.recommendation_text}
+              </p>
+            </div>
+
+            {selectedConsultation.requires_expert_confirmation === 1 && (
+              <div className="p-3 bg-amber-50/80 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-2">
+                <AlertTriangle size={16} className="text-amber-700 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  {isTamil
+                    ? 'மாதிரி கணிப்பு நம்பகத்தன்மை குறைவாக உள்ளதால், ரசாயன மருந்துகளை வாங்குவதற்கு முன் வட்டார வேளாண்மை விரிவாக்க அலுவலர் அல்லது KVK ஆலோசனையை பெறவும்.'
+                    : 'Model confidence was low for this case. Ground verification by your nearest Krishi Vigyan Kendra (KVK) officer is recommended before chemical intervention.'}
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                onClick={() => {
+                  const c = selectedConsultation;
+                  setSelectedConsultation(null);
+                  navigate('/assistant', {
+                    state: {
+                      initialQuery: isTamil
+                        ? `${c.crop_type} ${c.detected_disease} குறித்த தொடர் கேள்வி:`
+                        : `Follow-up question regarding ${c.crop_type} with ${c.detected_disease}:`,
+                      context: {
+                        crop: c.crop_type,
+                        condition: c.detected_disease,
+                        confidence: c.confidence,
+                        status: c.quality_status
+                      }
+                    }
+                  });
+                }}
+                className="flex-1 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-all"
+              >
+                <MessageSquare size={15} />
+                <span>{isTamil ? 'உதவியாளருடன் தொடர்ந்து பேச' : 'Continue in AI Assistant'}</span>
+              </button>
+              <button
+                onClick={() => setSelectedConsultation(null)}
                 className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold"
               >
                 {isTamil ? 'மூடு' : 'Close'}

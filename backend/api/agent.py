@@ -121,15 +121,15 @@ def get_workflow_manifest():
         "version": "1.0.0",
         "platform": "AgentFoundry / Code for a Billion",
         "nodes": [
-            {"id": "input_ingestion", "type": "multimodal_input_gate", "tools": ["sarvam_stt"]},
+            {"id": "input_ingestion", "type": "multimodal_input_gate", "tools": ["sarvam_speech_to_text"]},
             {"id": "intent_routing", "type": "conditional_router", "tools": []},
-            {"id": "disease_detection", "type": "vision_inference", "tools": ["efficientnet_v2_onnx", "quality_gatekeeper"]},
-            {"id": "weather_lookup", "type": "meteorological_feed", "tools": ["open_meteo_api", "weather_alert_rules"]},
+            {"id": "disease_detection", "type": "vision_inference", "tools": ["efficientnet_v2_disease_detector", "quality_gatekeeper"]},
+            {"id": "weather_lookup", "type": "meteorological_feed", "tools": ["open_meteo_weather_service", "weather_alert_rules"]},
             {"id": "schemes_provider", "type": "knowledge_retrieval", "tools": ["government_schemes_database"]},
             {"id": "context_assembly", "type": "grounding_synthesizer", "tools": ["spray_window_evaluator"]},
-            {"id": "agricultural_reasoning", "type": "llm_copilot", "tools": ["sarvam_105b_conversations"]},
-            {"id": "voice_synthesis", "type": "audio_generator", "tools": ["sarvam_bulbul_v3"]},
-            {"id": "persistence", "type": "cloud_storage", "tools": ["supabase_postgres", "supabase_storage", "local_sqlite"]}
+            {"id": "agricultural_reasoning", "type": "llm_copilot", "tools": ["sarvam_agricultural_reasoner", "sarvam_105b_conversations"]},
+            {"id": "voice_synthesis", "type": "audio_generator", "tools": ["sarvam_bulbul_tts"]},
+            {"id": "persistence", "type": "cloud_storage", "tools": ["supabase_storage_and_db", "local_sqlite_audit"]}
         ],
         "languages": ["ta", "en", "code-mix"],
         "safety_boundaries": [

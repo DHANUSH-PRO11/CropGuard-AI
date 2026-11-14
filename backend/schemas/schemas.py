@@ -69,6 +69,9 @@ class CropAnalysisResponse(BaseModel):
     is_healthy: bool
     status: str
     top_predictions: List[TopPrediction]
+    alternative_predictions: Optional[List[dict]] = None
+    symptoms: Optional[str] = None
+    cultural_control: Optional[List[str]] = None
     disease: Optional[str] = None
     severity: Optional[str] = "Not determined"
     risk: Optional[str] = "Not determined"

@@ -12,7 +12,7 @@
       "id": "input_ingestion",
       "name": "Multimodal Input Ingestion",
       "type": "input",
-      "tools": ["sarvam_stt"]
+      "tools": ["sarvam_speech_to_text"]
     },
     {
       "id": "intent_routing",
@@ -23,13 +23,13 @@
       "id": "disease_detection",
       "name": "EfficientNetV2 Disease Prediction",
       "type": "model_inference",
-      "tools": ["efficientnet_v2_onnx", "quality_gatekeeper"]
+      "tools": ["efficientnet_v2_disease_detector", "quality_gatekeeper"]
     },
     {
       "id": "weather_lookup",
       "name": "Micro-climate Meteorological Analysis",
       "type": "external_api",
-      "tools": ["open_meteo_api", "weather_alert_rules"]
+      "tools": ["open_meteo_weather_service", "weather_alert_rules"]
     },
     {
       "id": "schemes_provider",
@@ -41,6 +41,7 @@
       "id": "context_assembly",
       "name": "Grounding Synthesis & Safety Dock",
       "type": "transformer",
+      "tools": ["spray_window_evaluator"],
       "thresholds": {
         "uncertainty_cutoff": 0.60
       }
@@ -49,18 +50,21 @@
       "id": "agricultural_reasoning",
       "name": "Agricultural LLM Reasoning",
       "type": "llm",
+      "tools": ["sarvam_agricultural_reasoner"],
       "model": "sarvam-105b-conversations"
     },
     {
       "id": "voice_synthesis",
       "name": "Audio Synthesis",
       "type": "tts",
+      "tools": ["sarvam_bulbul_tts"],
       "model": "bulbul:v3"
     },
     {
       "id": "persistence",
-      "name": "Supabase Storage & DB",
+      "name": "Persistence & Automation Hub",
       "type": "database",
+      "tools": ["supabase_storage_and_db", "local_sqlite_audit"],
       "optional": true
     }
   ]

@@ -294,6 +294,23 @@ class DiseaseDetector:
         condition = parts[1].replace('_', ' ') if len(parts) > 1 else class_name
         is_healthy = 'healthy' in condition.lower()
 
+        # Alternative differential predictions (top 2 to 4)
+        alternative_predictions = []
+        for p in top_predictions[1:4]:
+            p_parts = p["class_name"].split('___')
+            p_crop = p_parts[0].replace('_', ' ') if len(p_parts) > 0 else "Unknown"
+            p_cond = p_parts[1].replace('_', ' ') if len(p_parts) > 1 else p["class_name"]
+            alternative_predictions.append({
+                "class_name": p["class_name"],
+                "crop": p_crop,
+                "condition": p_cond,
+                "confidence": round(float(p["confidence"]), 4),
+                "confidence_percent": round(float(p["confidence"]) * 100.0, 1)
+            })
+
+        # Agronomic symptoms and practical cultural control guidelines
+        symptoms, cultural_control = self._get_disease_agronomic_details(crop, condition, is_healthy)
+
         # 7. Model-confidence uncertainty threshold check (kept separate from quality warnings)
         conf_percent = confidence * 100.0
         uncertainty_reason: Optional[str] = None
@@ -315,6 +332,9 @@ class DiseaseDetector:
             "confidence": confidence,
             "is_healthy": is_healthy,
             "top_predictions": top_predictions,
+            "alternative_predictions": alternative_predictions,
+            "symptoms": symptoms,
+            "cultural_control": cultural_control,
             "disease": condition,
             "severity": "Not determined",
             "risk": "Not determined",
@@ -331,3 +351,88 @@ class DiseaseDetector:
             "preprocessing_mode": preprocessing_mode,
             "tta_enabled": enable_tta
         }
+
+    def _get_disease_agronomic_details(self, crop: str, condition: str, is_healthy: bool) -> Tuple[str, List[str]]:
+        """Provides evidence-grounded symptoms and non-chemical cultural control measures for the condition."""
+        cond_lower = condition.lower()
+        if is_healthy:
+            return (
+                f"Vibrant green {crop} foliage with normal leaf turgidity and no observable chlorosis, necrotic spotting, or pathogen lesions.",
+                [
+                    "Maintain standard drip fertigation schedules matched to the current crop vegetative stage.",
+                    "Inspect lower canopy foliage weekly for early signs of fungal spore establishment.",
+                    "Ensure balanced organic compost additions to maintain beneficial soil microorganisms."
+                ]
+            )
+
+        if "early blight" in cond_lower:
+            return (
+                "Concentric dark brown rings forming characteristic 'target-board' lesions on older lower foliage; yellow chlorotic halos around lesions.",
+                [
+                    "Prune and destroy infected lower leaves immediately; avoid composting infected foliage.",
+                    "Use drip irrigation at ground level to prevent water splashing onto foliage.",
+                    "Apply natural bio-control (Trichoderma viride or 3% neem oil emulsion) during early lesion onset.",
+                    "Practice 2-3 season crop rotation with non-solanaceous crops to break fungal soil cycles."
+                ]
+            )
+
+        if "late blight" in cond_lower:
+            return (
+                "Water-soaked dark lesions on leaf tips or margins; delicate white cottony fungal sporulation on leaf undersides in high humidity.",
+                [
+                    "Uproot and bury severely infected plants in deep pits far from the field.",
+                    "Widen plant spacing and prune side shoots to optimize canopy airflow and reduce leaf wetness.",
+                    "Avoid entering or cultivating wet fields during morning dew to stop mechanical pathogen spread.",
+                    "Consult local Krishi Vigyan Kendra (KVK) officers for certified regional bio-fungicides."
+                ]
+            )
+
+        if "bacterial spot" in cond_lower:
+            return (
+                "Small, water-soaked dark circular spots that become angular and scab-like, frequently surrounded by a yellow halo.",
+                [
+                    "Use certified disease-free seeds and hot-water treated transplants.",
+                    "Strictly avoid overhead sprinkler irrigation; maintain weed-free buffer zones.",
+                    "Sanitize pruning tools with 70% alcohol or bleach between plant rows."
+                ]
+            )
+
+        if "yellow leaf curl" in cond_lower or "virus" in cond_lower:
+            return (
+                "Severe upward cupping of leaves, yellowing of leaf margins, reduced leaf size, and stunted bush-like growth.",
+                [
+                    "Install yellow sticky traps (15-20 traps/acre) to monitor and control whitefly insect vectors.",
+                    "Erect 40-50 mesh insect-proof nylon nets in nursery beds before field transplanting.",
+                    "Rogue out and burn symptomatic viral host plants immediately to protect the remaining field."
+                ]
+            )
+
+        if "powdery mildew" in cond_lower:
+            return (
+                "White, talcum powder-like fungal patches on upper leaf surfaces, progressing to yellowing and premature leaf fall.",
+                [
+                    "Prune overcrowded branches to maximize sunlight penetration into the inner canopy.",
+                    "Spray diluted neem oil (5 ml/L) or potassium bicarbonate bio-solution as an eco-friendly remedy.",
+                    "Choose resistant or tolerant seed varieties for future planting cycles."
+                ]
+            )
+
+        if "rust" in cond_lower:
+            return (
+                "Raised reddish-brown or orange powdery pustules on the leaf surface that rupture the epidermis.",
+                [
+                    "Collect and destroy crop debris after harvest to reduce overwintering teliospores.",
+                    "Avoid high-density planting to prevent stagnant humid micro-climates around leaves.",
+                    "Verify with local agricultural extension officers before applying protective interventions."
+                ]
+            )
+
+        # Generic grounded fallback for other conditions
+        return (
+            f"Foliar symptoms characteristic of {condition} observed on {crop} leaf tissue.",
+            [
+                "Isolate and remove visibly diseased foliage to prevent secondary spore dispersal.",
+                "Ensure drip irrigation to keep canopy foliage dry and well-aerated.",
+                "Consult your nearest Krishi Vigyan Kendra (KVK) agronomist for verified crop-specific guidance."
+            ]
+        )

@@ -214,9 +214,9 @@ export default function Weather() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-5 border-t border-white/15 relative z-10 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mt-6 pt-5 border-t border-white/15 relative z-10 text-xs">
                 <div className="bg-black/15 backdrop-blur-xs p-2.5 rounded-xl border border-white/10">
-                  <span className="opacity-70 text-[10px] uppercase font-bold block mb-0.5">Humidity</span>
+                  <span className="opacity-70 text-[10px] uppercase font-bold block mb-0.5">{isTamil ? "ஈரப்பதம்" : "Humidity"}</span>
                   <div className="flex items-center gap-1.5 font-bold text-sm">
                     <Droplets size={14} className="text-blue-300" />
                     <span>{weather.current.humidity}%</span>
@@ -224,7 +224,7 @@ export default function Weather() {
                 </div>
 
                 <div className="bg-black/15 backdrop-blur-xs p-2.5 rounded-xl border border-white/10">
-                  <span className="opacity-70 text-[10px] uppercase font-bold block mb-0.5">Wind Speed</span>
+                  <span className="opacity-70 text-[10px] uppercase font-bold block mb-0.5">{isTamil ? "காற்றின் வேகம்" : "Wind Speed"}</span>
                   <div className="flex items-center gap-1.5 font-bold text-sm">
                     <Wind size={14} className="text-teal-300" />
                     <span>{weather.current.wind_speed} km/h</span>
@@ -232,17 +232,33 @@ export default function Weather() {
                 </div>
 
                 <div className="bg-black/15 backdrop-blur-xs p-2.5 rounded-xl border border-white/10">
-                  <span className="opacity-70 text-[10px] uppercase font-bold block mb-0.5">Spray Status</span>
+                  <span className="opacity-70 text-[10px] uppercase font-bold block mb-0.5">{isTamil ? "மழை வாய்ப்பு" : "Rain Probability"}</span>
                   <div className="flex items-center gap-1.5 font-bold text-sm">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                    <span>{weather.current.wind_speed < 15 ? "Suitable" : "Careful"}</span>
+                    <CloudRain size={14} className="text-sky-300" />
+                    <span>{weather.hourly?.[0]?.precipitation_probability ?? 0}%</span>
                   </div>
                 </div>
 
                 <div className="bg-black/15 backdrop-blur-xs p-2.5 rounded-xl border border-white/10">
-                  <span className="opacity-70 text-[10px] uppercase font-bold block mb-0.5">Updated</span>
+                  <span className="opacity-70 text-[10px] uppercase font-bold block mb-0.5">{isTamil ? "மழை அளவு" : "Precipitation"}</span>
+                  <div className="flex items-center gap-1.5 font-bold text-sm">
+                    <CloudRain size={14} className="text-cyan-300" />
+                    <span>{weather.current.precipitation ?? 0} mm</span>
+                  </div>
+                </div>
+
+                <div className="bg-black/15 backdrop-blur-xs p-2.5 rounded-xl border border-white/10">
+                  <span className="opacity-70 text-[10px] uppercase font-bold block mb-0.5">{isTamil ? "தெளிப்பு நிலை" : "Spray Window"}</span>
+                  <div className="flex items-center gap-1.5 font-bold text-sm">
+                    <span className={`w-2 h-2 rounded-full ${weather.current.wind_speed < 15 && (weather.hourly?.[0]?.precipitation_probability || 0) < 60 ? "bg-emerald-400" : "bg-amber-400"}`}></span>
+                    <span>{weather.current.wind_speed < 15 && (weather.hourly?.[0]?.precipitation_probability || 0) < 60 ? (isTamil ? "சாதகமானது" : "Favorable") : (isTamil ? "கவனிக்கவும்" : "Caution")}</span>
+                  </div>
+                </div>
+
+                <div className="bg-black/15 backdrop-blur-xs p-2.5 rounded-xl border border-white/10">
+                  <span className="opacity-70 text-[10px] uppercase font-bold block mb-0.5">{isTamil ? "புதுப்பிக்கப்பட்டது" : "Freshness"}</span>
                   <div className="font-semibold text-[11px] text-emerald-100 truncate">
-                    {new Date(weather.last_updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {weather.last_updated ? new Date(weather.last_updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Just now"}
                   </div>
                 </div>
               </div>
