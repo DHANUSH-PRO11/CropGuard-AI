@@ -18,17 +18,35 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are AgroNex, an AI agricultural copilot for smallholder and commercial farmers.
+SYSTEM_PROMPT = """You are AgroNex, a knowledgeable, farmer-friendly AI agricultural copilot for smallholder and commercial farmers.
 
-CORE PRINCIPLES & SAFETY RULES:
-1. Grounded Agricultural Reasoning: Base your advice strictly on provided factual observations (crop disease model output, quality checks, and real-time weather metrics). Never fabricate weather data or invented disease conditions.
-2. Model Prediction vs. Diagnosis: Always distinguish an AI visual observation from a certified agronomist diagnosis. If confidence is uncertain (<60%) or image quality is degraded, explicitly advise the farmer to verify with a local Krishi Vigyan Kendra (KVK) or agricultural extension officer before expensive interventions.
-3. Weather-Integrated Spray Window:
-   - If rain (>60% probability or >5mm) is forecasted within the next 24-48 hours, warn against spraying chemical pesticides/fungicides because rain will wash them off into runoff and waste money.
-   - If high wind (>25 km/h) is present, warn of spray drift hazard.
-4. Responsible Plant Protection: Prioritize cultural and bio-control methods (proper spacing, removing infected debris, neem oil, Trichoderma viride) before recommending chemical options. Never fabricate chemical dosages or unverified proprietary brand mixtures.
-5. Communication Style: Conversational, empathetic, and direct (3-5 concise sentences). Provide clear, actionable bullet points for immediate farmer steps.
-6. Language: Respond in the farmer's preferred language (Tamil, English, or natural Tamil-English code-mix commonly used by Tamil Nadu farmers)."""
+CORE OBJECTIVE:
+Provide complete, useful, and actionable agricultural explanations containing all important agronomic guidance in a clear, structured, and farmer-friendly format. The response length must naturally match the complexity of the inquiry. Never force responses into a fixed number of lines, sentences, or bullet points.
+
+RESPONSE STRUCTURE & CONTENT GUIDELINES:
+1. Direct Explanation & Possible Causes:
+   - Begin immediately with the likely causes or explanation in clear, simple terms.
+   - Clearly distinguish confirmed visual observations from possible or probable underlying causes (such as excess watering, root rot, fungal/bacterial infection, pest damage, or nutrient deficiencies).
+   - Skip pleasantries, robotic greetings ("Hello!", "I understand you are worried..."), and repetitive filler.
+
+2. Practical Immediate Actions & Preventive Steps:
+   - Provide all practical, necessary next steps using clear, readable bullet points under the heading **உடனடியாக செய்ய வேண்டியவை:** (or **What to do now:** in English).
+   - Focus on cultural sanitation, irrigation/drainage adjustment, organic remedies, and bio-controls (such as neem oil, Trichoderma viride, vermicompost) before chemical interventions.
+   - Explain necessary precautions (e.g. not spraying chemicals without confirmation, avoiding spraying during rain or high wind).
+
+3. Weather & Spray Safety Integration:
+   - If rain (>60% probability or >2mm) is forecast within 24-48 hours, advise postponing foliar sprays to prevent chemical wash-off.
+   - If wind speed exceeds 25 km/h, advise against spraying due to drift hazards.
+
+4. Expert Verification:
+   - Conclude with a single, helpful recommendation under **குறிப்பு:** (or **Note:** in English) advising the farmer to verify with their nearest Krishi Vigyan Kendra (KVK) or village agricultural extension officer if the issue persists.
+   - Do NOT repeat the KVK disclaimer multiple times.
+
+FORMATTING RULES:
+- Use clean Markdown with readable headings (e.g., **உடனடியாக செய்ய வேண்டியவை:** / **What to do now:** and **குறிப்பு:** / **Note:**).
+- Use concise bullet points for action steps.
+- Avoid unnecessary technical jargon; speak in terms practical farmers understand.
+- Language: Respond in the farmer's preferred language (Tamil, English, or conversational Tamil-English code-mix commonly used by Tamil Nadu farmers)."""
 
 class AIAssistant:
     def __init__(self):
@@ -57,34 +75,31 @@ class AIAssistant:
             elif not self.api_key:
                 logger.warning("SARVAM_API_KEY is not configured; AI assistant will operate in fallback mode.")
 
-    def clean_for_tts(self, text: str, max_chars: int = 220) -> str:
-        """Strip markdown/emoji symbols and summarize to a crisp spoken length for natural Sarvam Bulbul TTS."""
-        # Remove markdown tokens, bullets, and emoji/pictograph ranges while preserving Tamil/ASCII punctuation
-        clean = re.sub(r'[*_~`#•🌾🎤📷🤖⚠️✅🌱💧☀️]+', ' ', text)
-        clean = re.sub(r'^\s*(?:[-+*]|\d+\.)\s+', '', clean, flags=re.MULTILINE)
+    def clean_for_tts(self, text: str) -> str:
+        """
+        Cleans markdown tokens, asterisks, hashtags, and decorative emojis so that
+        Sarvam Bulbul v3 reads the complete response naturally aloud without pronunciation artifacts.
+        Preserves all paragraphs, bullet points, and sentences in full without truncation.
+        """
+        if not text:
+            return ""
+
+        # Remove markdown bold/italics markers (*, **, _, ~)
+        clean = re.sub(r'[*_~`#]+', '', text)
+        # Remove decorative emojis
+        clean = re.sub(r'[🌾🎤📷🤖⚠️✅🌱💧☀️💡]+', ' ', clean)
+        # Normalize bullet markers at start of lines into clean spoken flow
+        clean = re.sub(r'^\s*[-•*]\s*', '', clean, flags=re.MULTILINE)
+        clean = re.sub(r'^\s*\d+\.\s*', '', clean, flags=re.MULTILINE)
+        # Clean colons followed by newlines/dots
+        clean = re.sub(r':\s*\.+', ':', clean)
+        clean = re.sub(r'\.+\s*:', ':', clean)
+        # Convert line breaks to periods/pauses
         clean = re.sub(r'\n+', '. ', clean)
         clean = re.sub(r'\s+', ' ', clean).strip()
         clean = re.sub(r'\.\s*\.', '.', clean)
 
-        if len(clean) <= max_chars:
-            return clean
-
-        # Trim cleanly at the nearest sentence boundary
-        truncated = clean[:max_chars]
-        for sep in ['. ', '। ']:
-            idx = truncated.rfind(sep)
-            if idx >= int(max_chars * 0.40):
-                return truncated[:idx + 1].strip()
-
-        for sep in [', ', '; ']:
-            idx = truncated.rfind(sep)
-            if idx >= int(max_chars * 0.45):
-                return truncated[:idx].strip() + "."
-
-        last_space = truncated.rfind(' ')
-        if last_space > 0:
-            return truncated[:last_space].strip() + "."
-        return truncated.strip()
+        return clean
 
     def _format_context_block(self, context: dict) -> str:
         """Serializes crop diagnosis and real-time weather into an authoritative grounding block."""
@@ -129,6 +144,10 @@ class AIAssistant:
         Intelligent, grounded agricultural reasoner that analyzes the farmer's question,
         identifies the crop and symptoms (dots/spots, leaf drop, leaf curl, growth, fertilizer,
         pests, mildew, rot, weather, schemes), and synthesizes specific, actionable agronomic advice.
+        Follows a structured format:
+        1. Possible causes / explanation (distinguishing visual observation from confirmed diagnosis)
+        2. Practical immediate actions & precautions as bullet points under '**உடனடியாக செய்ய வேண்டியவை:**' / '**What to do now:**'
+        3. Expert verification under '**குறிப்பு:**' / '**Note:**' (recommending KVK or agricultural officer verification)
         """
         q_lower = (question or "").lower()
         is_tamil = language == "ta" or any('\u0b80' <= c <= '\u0bff' for c in question)
@@ -137,6 +156,7 @@ class AIAssistant:
         crop = context.get("crop") if context else None
 
         crops_map = [
+            ("மஞ்சள் செடி", "Turmeric", ["மஞ்சள் செடி", "மஞ்சள் பயிர்", "மஞ்சள் கிழங்கு", "turmeric"]),
             ("ஆப்பிள்", "Apple", ["ஆப்பிள்", "apple"]),
             ("தக்காளி", "Tomato", ["தக்காளி", "tomato"]),
             ("நெல்", "Paddy / Rice", ["நெல்", "நெற்", "அரிசி", "paddy", "rice"]),
@@ -170,8 +190,8 @@ class AIAssistant:
             detected_crop_ta = crop
             detected_crop_en = crop
 
-        crop_header_ta = f" ({detected_crop_ta})" if detected_crop_ta else ""
-        crop_header_en = f" ({detected_crop_en})" if detected_crop_en else ""
+        crop_name_ta = detected_crop_ta or "பயிர்"
+        crop_name_en = detected_crop_en or "crop"
 
         # 2. Extract Comprehensive Symptoms, Problems & Intent
         has_spots_dots = any(w in q_lower for w in [
@@ -228,245 +248,220 @@ class AIAssistant:
         weather = context.get("weather", {}) if context else {}
         alerts = weather.get("alerts", []) if isinstance(weather, dict) else []
 
-        # 3. Synthesize Tailored Response in Tamil
+        # 3. Synthesize Tailored, Structured Response in Tamil
         if is_tamil:
-            lines = [f"🌾 அக்ரோநெக்ஸ் விவசாய வழிகாட்டல்{crop_header_ta}:"]
-
-            # Government schemes query
             if has_schemes:
-                lines.append("• அரசு விவசாய நலத் திட்டங்கள்:")
-                lines.append("  1. பி.எம்-கிசான் (PM-KISAN): ஆண்டுக்கு ₹6,000 நேரடி உதவித்தொகை.")
-                lines.append("  2. பயிர் காப்பீட்டுத் திட்டம் (PMFBY): இயற்கை இடர்பாடுகளுக்கான இழப்பீடு.")
-                lines.append("  3. நுண்ணீர் பாசன மானியம்: சிறு, குறு விவசாயிகளுக்கு 100% மானியத்தில் சொட்டு நீர் பாசனம்.")
-                lines.append("• அருகிலுள்ள வட்டார வேளாண்மை விரிவாக்க மையத்தை (ADA Office) அணுகவும்.")
-                return "\n".join(lines)
-
-            # Specific Symptom 1: Spots / Dots / Scab / Rust
-            if has_spots_dots or has_fungus_blight or cond:
+                intro = "விவசாயிகளின் நிதி பாதுகாப்பு மற்றும் நவீன வேளாண்மைக்கான முக்கிய அரசு நலத் திட்டங்கள்:"
+                actions = [
+                    "பி.எம்-கிசான் (PM-KISAN): தகுதியுள்ள அனைத்து விவசாயிகளுக்கும் ஆண்டுக்கு ₹6,000 நேரடி வங்கிப் பரிமாற்றம் (3 தவணைகளில்).",
+                    "பிரதமர் பயிர் காப்பீட்டுத் திட்டம் (PMFBY): இயற்கை இடர்பாடுகள், வெள்ளம், வறட்சி போன்றவற்றால் ஏற்படும் பயிர் இழப்புகளுக்கு குறைந்த பிரீமியத்தில் இழப்பீடு.",
+                    "நுண்ணீர் பாசன மானியத் திட்டம்: சிறு மற்றும் குறு விவசாயிகளுக்கு 100% மானியத்திலும், இதர விவசாயிகளுக்கு 75% மானியத்திலும் சொட்டு நீர் பாசன வசதி.",
+                    "விவசாய ஆவணங்கள்: ஆதார் அட்டை, நில பட்டா/சிட்டா மற்றும் வங்கி கணக்கு புத்தகத்துடன் இ-சேவை மையம் மூலம் விண்ணப்பிக்கலாம்."
+                ]
+                note = "உங்கள் கிராம நிர்வாக அலுவலர் (VAO) அல்லது வட்டார வேளாண்மை உதவி இயக்குநர் (ADA) அலுவலகத்தை அணுகி விண்ணப்ப வழிகாட்டலைப் பெறலாம்."
+            elif has_yellowing or has_water_issue:
+                intro = f"உங்கள் {crop_name_ta} இலைகள் மஞ்சளாக மாறுவதற்கு அதிகப்படியான தண்ணீர், வேர் அழுகல் அல்லது ஊட்டச்சத்து குறைபாடு போன்ற காரணங்கள் இருக்கலாம். இலைகளை மட்டும் பார்த்து சரியான காரணத்தை உறுதிப்படுத்த முடியாது."
+                actions = [
+                    "செடிக்கு சரியான வடிகால் வசதி உள்ளதா என்று பாருங்கள். தண்ணீர் தேங்கினால் வேர் அழுகும் வாய்ப்பு உள்ளது.",
+                    "மண்ணின் ஈரப்பதத்தைப் பார்த்து தேவையான அளவு மட்டும் தண்ணீர் ஊற்றுங்கள்.",
+                    "பாதிக்கப்பட்ட இலைகள் மற்றும் செடியைச் சுற்றியுள்ள அழுகிய கழிவுகளை அகற்றுங்கள்.",
+                    "ஊட்டச்சத்து குறைபாடு சந்தேகம் இருந்தால் மண் பரிசோதனை செய்து தேவையான உரத்தைத் தேர்வு செய்யுங்கள்.",
+                    "வேர் அழுகல் அல்லது பூஞ்சை சந்தேகம் இருந்தால் 1 லிட்டர் தண்ணீரில் 5 கிராம் டிரைக்கோடெர்மா விரிடி (Trichoderma viride) கலந்து வேர்ப்பகுதியில் ஊற்றுங்கள்.",
+                    "மழை வர வாய்ப்பு இருந்தாலோ அல்லது பலத்த காற்று வீசினாலோ பூஞ்சாண மருந்து தெளிப்பதைத் தவிர்க்கவும்.",
+                    "காரணம் உறுதியாகத் தெரியாமல் ரசாயன மருந்துகளைத் தெளிக்க வேண்டாம்."
+                ]
+                note = "பிரச்சினை தொடர்ந்து இருந்தால் அருகிலுள்ள KVK அல்லது வேளாண் அதிகாரியிடம் செடியைக் காட்டி சரியான சிகிச்சையை உறுதிப்படுத்துங்கள்."
+            elif has_spots_dots or has_fungus_blight or cond:
                 cond_text = f" ({cond.replace('_', ' ')})" if cond else ""
-                if detected_crop_en == "Apple":
-                    lines.append("• ஆப்பிள் இலைகளில் டாட்கள் / புள்ளிகள் தோன்றுவதற்கான முக்கிய காரணங்கள்:")
-                    lines.append("  1. ஆப்பிள் ஸ்கேப் (Apple Scab - Venturia inaequalis பூஞ்சை): இலையின் மேல் பகுதியில் வட்டமான அடர் ஆலிவ்-பச்சை அல்லது பழுப்பு நிற டாட்கள் தோன்றும்.")
-                    lines.append("  2. செடார் ஆப்பிள் ரஸ்ட் (Cedar Apple Rust) அல்லது ஆல்டர்னேரியா இலைப்புள்ளி: மஞ்சள், ஆரஞ்சு அல்லது கரும்பழுப்பு நிற புள்ளிகள்.")
-                    lines.append("• பரிந்துரைக்கப்படும் தீர்வு & மேலாண்மை:")
-                    lines.append("  1. மேன்கோசெப் (Mancozeb 75% WP) 2 கிராம் அல்லது காப்பர் ஆக்சிகுளோரைடு 2.5 கிராம் 1 லிட்டர் நீரில் கலந்து இலைகளில் நன்கு படும்படி தெளிக்கவும்.")
-                    lines.append("  2. புள்ளிகள் விழுந்து கீழே உதிர்ந்த இலைகளை மரத்தடியில் இருந்து உடனே அகற்றி அழிக்கவும் (மழைக்காலத்தில் பூஞ்சை பரவுவதைத் தடுக்க).")
-                    lines.append("  3. புதிய தளிர்களைப் பாதுகாக்க 12-15 நாட்கள் இடைவெளியில் கேப்டன் (Captan 50% WP) 2 கிராம்/லிட்டர் தெளிப்பது நல்ல பலன் தரும்.")
-                elif detected_crop_en == "Tomato":
-                    lines.append("• தக்காளி இலையில் புள்ளிகள் / டாட்கள் தோன்றுவதற்கான காரணங்கள்:")
-                    lines.append("  1. ஆல்டர்னேரியா இலைக்கருகல் (Early Blight) அல்லது செப்டோரியா இலைப்புள்ளி பூஞ்சை தொற்று.")
-                    lines.append("• தீர்வு: மேன்கோசெப் 2 கிராம்/லிட்டர் அல்லது காப்பர் ஆக்சிகுளோரைடு 2.5 கிராம் + ஸ்ட்ரெப்டோசைக்ளின் 1 கிராம்/10 லிட்டர் நீரில் கலந்து தெளிக்கவும்.")
-                elif detected_crop_en == "Paddy / Rice":
-                    lines.append("• நெற்பயிரில் இலைப்புள்ளிகள் மேலாண்மை:")
-                    lines.append("  1. பழுப்பு இலைப்புள்ளி (Brown Spot) அல்லது குலை நோய் (Blast) தாக்குதல்.")
-                    lines.append("• தீர்வு: டிரைசைக்ளசோல் 75% WP 1 கிராம்/லிட்டர் அல்லது எடிஃபென்பாஸ் 1 மிலி/லிட்டர் நீரில் கலந்து தெளிக்கவும்.")
-                elif detected_crop_en == "Chilli":
-                    lines.append("• மிளகாய் இலைப்புள்ளி மற்றும் ஆந்த்ராக்னோஸ் நோய் மேலாண்மை:")
-                    lines.append("• தீர்வு: கார்பென்டாசிம் 1 கிராம்/லிட்டர் அல்லது அசாசிஸ்ட்ரோபின் 1 மிலி/லிட்டர் நீரில் கலந்து மாலையில் தெளிக்கவும்.")
-                else:
-                    lines.append(f"• இலைப்புள்ளி மற்றும் பூஞ்சை நோய் மேலாண்மை{cond_text}:")
-                    lines.append("  1. பாதிக்கப்பட்ட இலைகளை உடனே வெட்டி அகற்றி அழிக்கவும்.")
-                    lines.append("  2. காப்பர் ஆக்சிகுளோரைடு (COC) 2.5 கிராம்/லிட்டர் அல்லது மேன்கோசெப் 2 கிராம்/லிட்டர் நீரில் கலந்து தெளிக்கவும்.")
+                intro = f"உங்கள் {crop_name_ta} இலைகளில் புள்ளிகள் / கருகல் தோன்றுவதற்கு பூஞ்சை அல்லது பாக்டீரியா தொற்று காரணமாக இருக்கலாம்{cond_text}. இலைகளில் தோன்றும் மாற்றங்களை மட்டும் வைத்து 100% நோயை உறுதி செய்ய முடியாது."
+                actions = [
+                    "புள்ளிகள் விழுந்த மற்றும் அழுகிய இலைகளை உடனே வெட்டி அகற்றி தோட்டத்தில் இருந்து அப்புறப்படுத்தி அழிக்கவும்.",
+                    "செடிகளின் இலைகளில் தண்ணீர் தேங்காதவாறு தரைமட்டத்தில் அல்லது சொட்டு நீர் பாசனம் மூலம் தண்ணீர் பாய்ச்சவும்.",
+                    "ஆரம்பகட்ட பூஞ்சை தடுப்பிற்கு 1 லிட்டர் தண்ணீரில் 2.5 கிராம் காப்பர் ஆக்சிகுளோரைடு (COC) அல்லது 2 கிராம் மேன்கோசெப் (Mancozeb) கலந்து இலைகளின் இருபுறமும் படும்படி தெளிக்கவும்.",
+                    "இயற்கை முறையில் கட்டுப்படுத்த 3% வேப்ப எண்ணெய் கரைசலை 10 நாட்களுக்கு ஒருமுறை தெளிக்கலாம்.",
+                    "மழை வர வாய்ப்பு இருந்தாலோ (24-48 மணி நேரம்) அல்லது பலத்த காற்று வீசினாலோ தெளிப்பதைத் தள்ளிப்போடவும்.",
+                    "நண்பகல் கடும் வெயிலில் ரசாயன மருந்துகளைத் தெளிக்க வேண்டாம்."
+                ]
+                note = "தொற்று பரவுவது நிற்கவில்லை என்றால் பாதிக்கப்பட்ட இலை மாதிரியுடன் அருகிலுள்ள வேளாண் அறிவியல் நிலையத்தை (KVK) அணுகி பரிசோதிக்கவும்."
+            elif has_leaf_curl:
+                intro = f"உங்கள் {crop_name_ta} இலைகள் சுருள்வதற்கு சாறு உறிஞ்சும் பூச்சிகள் (இலைப்பேன், அசுவினி, வெள்ளை ஈ) அல்லது பூச்சிகளால் பரவும் வைரஸ் தொற்று காரணமாக இருக்கலாம்."
+                actions = [
+                    "சாறு உறிஞ்சும் பூச்சிகளைக் கண்காணிக்க மற்றும் அழிக்க ஏக்கருக்கு 6-8 மஞ்சள் மற்றும் நீல வண்ண ஒட்டும் பொறிகளை அமைக்கவும்.",
+                    "மாலை வேளையில் 3% வேப்ப எண்ணெய் கரைசல் (10 லிட்டர் தண்ணீருக்கு 30 மி.லி + சோப்) தெளிக்கவும்.",
+                    "பாதிப்பு அதிகமாக இருந்தால் பரிந்துரைக்கப்பட்ட இமிடாக்குளோப்ரிட் (Imidacloprid 17.8% SL) 1 மி.லி / 3 லிட்டர் நீரில் கலந்து தெளிக்கவும்.",
+                    "வைரஸ் தாக்கி வளர்ச்சி முற்றிலும் குன்றிய செடிகளை வேரோடு பிடுங்கி எரித்து விடவும்.",
+                    "பலத்த காற்று வீசும் வேளைகளில் மருந்து தெளிப்பதைத் தவிர்க்கவும்."
+                ]
+                note = "பூச்சித் தாக்குதல் நீடித்தால் வேளாண் அலுவலரிடம் ஆலோசித்து ஒருங்கிணைந்த பயிர் பாதுகாப்பு முறைகளை மேற்கொள்ளவும்."
+            elif has_white_mildew:
+                intro = f"உங்கள் {crop_name_ta} இலைகளில் வெள்ளை நிற மாவு போன்ற படலம் சாம்பல் நோய் (Powdery Mildew) பூஞ்சைத் தொற்றால் ஏற்படுகிறது."
+                actions = [
+                    "செடிகளுக்கு இடையே போதுமான காற்றோட்டம் மற்றும் சூரிய ஒளி கிடைக்குமாறு அடர்ந்த கிளைகளை கவாத்து செய்யவும்.",
+                    "நீரில் கரையும் கந்தகம் (Wettable Sulphur 80% WP) 3 கிராம்/லிட்டர் அல்லது 3% வேப்ப எண்ணெய் கரைசல் மாலை வேளையில் தெளிக்கவும்.",
+                    "பாதிக்கப்பட்டு கீழே விழுந்த இலைகளைச் சேகரித்து எரிக்கவும்; நிலத்தில் மக்க விட வேண்டாம்.",
+                    "அதிக தழைச்சத்து (நைட்ரஜன்) உரம் இடுவதைத் தவிர்த்து சமச்சீரான பொட்டாஷ் உரங்களை இடவும்."
+                ]
+                note = "நோயின் தீவிரத்தை கட்டுப்படுத்த இயலவில்லை எனில் KVK அதிகாரியை அணுகி மாற்று பூஞ்சாணக்கொல்லியைத் தேர்வு செய்யவும்."
+            elif has_wilting_drying or has_root_rot:
+                intro = f"உங்கள் {crop_name_ta} வாடி வதங்குவதற்கு வேர் அழுகல் அல்லது வாடல் நோய் (Fusarium/Pythium பூஞ்சை) காரணமாக இருக்கலாம். மண்ணில் அதிகப்படியான நீர் தேங்குவது இதற்கு முக்கியக் காரணம்."
+                actions = [
+                    "உடனடியாக தண்ணீர் பாய்ச்சுவதை நிறுத்தி, செடியின் அடிப்பகுதியில் தேங்கியுள்ள நீரை வடிய வைக்க வடிகால் அமைக்கவும்.",
+                    "டிரைக்கோடெர்மா விரிடி (Trichoderma viride) உயிரி பூஞ்சாணக்கொல்லி 1 செடிக்கு 10-20 கிராம் அல்லது சூடோமோனாஸ் கரைசலை வேர்ப்பகுதியில் ஊற்றவும்.",
+                    "செடியின் வேர்ப் பகுதியில் 100-200 கிராம் வேப்பம் புண்ணாக்கு இட்டு மண்ணை லேசாகக் கிளறிவிடவும்.",
+                    "அழுகிய வேர் மற்றும் காய்ந்த செடிகளை வேரோடு அகற்றி நிலத்தில் இருந்து அப்புறப்படுத்தவும்."
+                ]
+                note = "வாடல் நோய் பரவும் அபாயம் உள்ளதால் வேளாண் விரிவாக்க மையத்தில் மண் பரிசோதனை செய்து வழிகாட்டல் பெறவும்."
+            elif has_pests:
+                intro = f"உங்கள் {crop_name_ta} பயிரில் இலை துளைப்பான் புழுக்கள், வண்டுகள் அல்லது தண்டு துளைப்பான் பூச்சிகளின் தாக்குதல் காணப்படுகிறது."
+                actions = [
+                    "காலை வேளையில் கண்ணில் தென்படும் புழுக்கள் மற்றும் முட்டைக் குவியல்களை கையால் சேகரித்து அழிக்கவும்.",
+                    "விளக்குப் பொறிகள் மற்றும் இனக்கவர்ச்சிப் பொறிகளை அமைத்து தாய் அந்துப்பூச்சிகளைக் கட்டுப்படுத்தவும்.",
+                    "இயற்கை முறையில் பேசில்லஸ் துரிஞ்சியென்சிஸ் (Bt) 2 கிராம்/லிட்டர் அல்லது 5% வேப்பங்கொட்டை சாறு தெளிக்கவும்.",
+                    "நன்மை செய்யும் பூச்சிகளுக்கு பாதிப்பு ஏற்படாமல் இருக்க ஒரே பூச்சிக்கொல்லியைத் திரும்பத் திரும்ப அடிக்க வேண்டாம்."
+                ]
+                note = "தாக்குதல் பொருளாதார சேத நிலையைத் தாண்டினால் உள்ளூர் வேளாண் அதிகாரியின் ஆலோசனையுடன் பாதுகாப்பான பூச்சிக்கொல்லியைத் தெளிக்கவும்."
+            elif has_fertilizer or has_growth_issue:
+                intro = f"உங்கள் {crop_name_ta} பயிரின் ஆரோக்கியமான வளர்ச்சிக்கு சமச்சீரான ஊட்டச்சத்து மேலாண்மை அவசியம். தழைச்சத்து, சாம்பல் சத்து அல்லது நுண்ணூட்டச்சத்து குறைபாட்டால் வளர்ச்சி பாதிக்கப்படலாம்."
+                actions = [
+                    "அடிப்படை உரமாக செடியின் வேர்ப் பகுதியைச் சுற்றி 10-15 கிலோ மட்கிய தொழு உரம் அல்லது மண்புழு உரம் இடவும்.",
+                    "வளர்ச்சியைத் தூண்ட நீரில் கரையும் 19:19:19 (NPK) உரம் 5 கிராம்/லிட்டர் நீரில் கலந்து இலைகளில் தெளிக்கவும்.",
+                    "நுண்ணூட்டச்சத்து குறைபாட்டைப் போக்க துத்தநாகம் (Zinc Sulphate) மற்றும் போராக்ஸ் கலவையை பரிந்துரைக்கப்பட்ட அளவில் தெளிக்கவும்.",
+                    "மண்ணின் ஈரப்பதத்தைப் பராமரித்து வேர்கள் உரங்களை எளிதில் உறிஞ்ச உதவவும்."
+                ]
+                note = "சரியான உரத் தேவையைத் தெரிந்துகொள்ள உங்கள் வட்டார வேளாண் அலுவலகத்தில் மண் பரிசோதனை அட்டையை (Soil Health Card) பெறவும்."
+            elif has_weather_query or alerts:
+                alert_text = alerts[0].get('message_ta', 'மழை எச்சரிக்கை உள்ளது.') if alerts else ""
+                intro = f"உங்கள் பகுதிக்கான வானிலை நிலவரம் மற்றும் பயிர் பாதுகாப்பு வழிகாட்டல்{': ' + alert_text if alert_text else ''}."
+                actions = [
+                    "மழை பெய்ய வாய்ப்பு (60% மேல்) அல்லது பலத்த காற்று (25 கி.மீ/மணிக்கு மேல்) இருந்தால் ரசாயன தெளிப்புகளை உடனடியாக தள்ளிப்போடவும்.",
+                    "காற்றின் வேகம் குறைவாக இருக்கும் காலை 7-10 மணி அல்லது மாலை 4-6 மணி வேளையில் மட்டுமே தெளிப்பு பணிகளை மேற்கொள்ளவும்.",
+                    "மழைக்காலத்தில் வயல்களில் நீர் தேங்காமல் வடிகால்களைத் தூர்வாரி சீராகப் பராமரிக்கவும்.",
+                    "தெளித்த மருந்துகள் மழையில் கழுவிச் செல்லாமல் இருக்க ஒட்டும் திரவம் (Sticker/Spreader) கலந்து தெளிக்கவும்."
+                ]
+                note = "வானிலை மாற்றங்களை தொடர்ந்து கவனித்து உள்ளூர் வேளாண் வானிலை அறிக்கையின்படி களப்பணிகளை திட்டமிடவும்."
+            else:
+                intro = f"உங்கள் {crop_name_ta} பயிரின் சீரான வளர்ச்சி மற்றும் நோய் எதிர்ப்பு சக்தியை அதிகரிக்க சிறந்த விவசாய நடைமுறைகளைப் பின்பற்றுவது அவசியமாகும்."
+                actions = [
+                    "மண்ணின் ஈரப்பதத்தை தொடர்ந்து பரிசோதித்து, வேர் பகுதியில் நீர் தேங்காமல் சீரான பாசனத்தை உறுதி செய்யவும்.",
+                    "மட்கிய இயற்கை மண்புழு உரம் மற்றும் நுண்ணூட்டச்சத்துக்களை இட்டு மண்ணின் வளத்தை அதிகரிக்கவும்.",
+                    "வாரத்திற்கு ஒருமுறை இலைகளின் அடிப்பகுதியை ஆய்வு செய்து பூச்சி மற்றும் பூஞ்சை தாக்குதலை தொடக்கத்திலேயே கண்டறியவும்.",
+                    "பயிர் பாதுகாப்புக்கு 15 நாட்களுக்கு ஒருமுறை இயற்கை வேப்ப எண்ணெய் (3%) கரைசலை முன்னெச்சரிக்கையாகத் தெளிக்கவும்."
+                ]
+                note = "குறிப்பிட்ட நோய் அல்லது ஊட்டச்சத்து சந்தேகங்களுக்கு உங்கள் ஊர் KVK அல்லது வேளாண் அதிகாரியிடம் செடியைக் காட்டி உறுதிப்படுத்தவும்."
 
-            # Specific Symptom 2: Leaf Curl / Crinkling
-            if has_leaf_curl:
-                lines.append("• இலை சுருட்டை ஏற்படுவதற்கான முக்கிய காரணங்கள்:")
-                lines.append("  1. சாறு உறிஞ்சும் பூச்சிகள் (இலைப்பேன்/Thrips, அசுவினி/Aphids, வெள்ளை ஈ) அல்லது வைரஸ் தொற்று.")
-                lines.append("• தீர்வு: இமிடாக்குளோப்ரிட் (Imidacloprid 17.8% SL) 1 மிலி / 3 லிட்டர் நீரில் கலந்து தெளிக்கவும். இயற்கை முறையில் 3% வேப்ப எண்ணெய் தெளிக்கவும்.")
-
-            # Specific Symptom 3: White Powdery Mildew
-            if has_white_mildew:
-                lines.append("• சாம்பல் நோய் (Powdery Mildew) கட்டுப்பாடு:")
-                lines.append("  1. இலைகளில் வெள்ளை மாவு போன்ற படலம் பூஞ்சை தொற்றால் ஏற்படுகிறது.")
-                lines.append("• தீர்வு: நீரில் கரையும் கந்தகம் (Wettable Sulphur 80% WP) 3 கிராம்/லிட்டர் அல்லது ஹெக்ஸாகோனசோல் 1 மிலி/லிட்டர் தெளிக்கவும்.")
-
-            # Specific Symptom 4: Leaf Drop / Stunted Growth
-            if has_leaf_drop or (has_growth_issue and not has_spots_dots):
-                lines.append("• இலை உதிர்தல் மற்றும் வளர்ச்சி குறைபாட்டிற்கான காரணங்கள்:")
-                lines.append("  1. வேர் பகுதியில் அதிகப்படியான நீர் தேக்கம் அல்லது கடுமையான வறட்சி (வேர் அழுகல்).")
-                lines.append("  2. முக்கிய ஊட்டச்சத்துக்களான நைட்ரஜன், துத்தநாகம் (Zinc) மற்றும் போரான் பற்றாக்குறை.")
-
-            # Specific Symptom 5: Fertilizer / Nutrition
-            if has_fertilizer or (has_growth_issue and not has_spots_dots):
-                lines.append("• பரிந்துரைக்கப்படும் உர மேலாண்மை:")
-                lines.append("  1. இயற்கை உரம்: மட்கிய தொழு உரம் அல்லது மண்புழு உரம் 10-15 கிலோ வேர் பகுதியில் இட்டு மண்ணை கிளறிவிடவும்.")
-                lines.append("  2. வளர்ச்சி ஊக்கி: நீரில் கரையும் 19:19:19 (NPK) உரம் 5 கிராம்/லிட்டர் நீரில் கலந்து இலைகளில் தெளிக்கவும்.")
-                lines.append("  3. நுண்ணூட்டச்சத்து: Zinc Sulphate மற்றும் Boron கலவையை தெளிப்பது புதிய தளிர்களை ஊக்குவித்து இலை உதிர்வைத் தடுக்கும்.")
-
-            # Specific Symptom 6: Yellowing / Chlorosis
-            if has_yellowing:
-                lines.append("• இலைகள் மஞ்சள் நிறமாவதை சரிசெய்ய:")
-                lines.append("  1. எப்சம் உப்பு (Magnesium Sulphate) 5 கிராம்/லிட்டர் தெளிப்பது பச்சையத்தை மீட்க உதவும்.")
-                lines.append("  2. இரும்புச்சத்து பற்றாக்குறைக்கு Ferrous Sulphate (19:19:19 உடன்) கலந்து தெளிக்கவும்.")
-
-            # Specific Symptom 7: Pests / Worms / Borers
-            if has_pests:
-                lines.append("• பூச்சி & புழு கட்டுப்பாடு:")
-                lines.append("  1. வேப்ப எண்ணெய் கரைசல் (3% - 10 லிட்டர் தண்ணீருக்கு 30 மி.லி) + காதி சோப் கலந்து மாலையில் தெளிக்கவும்.")
-                lines.append("  2. சாறு உறிஞ்சும் பூச்சிகளுக்கு மஞ்சள் மற்றும் நீல நிற ஒட்டும் பொறிகளை ஏக்கருக்கு 6-8 வைக்கவும்.")
-
-            # Specific Symptom 8: Wilting / Root Rot
-            if has_wilting_drying or has_root_rot:
-                lines.append("• பயிர் வாடல் மற்றும் வேர் அழுகல் தடுப்பு:")
-                lines.append("  1. டிரைக்கோடெர்மா விரிடி (Trichoderma viride) உயிரி பூஞ்சாணக்கொல்லி 1 செடிக்கு 10-20 கிராம் வேர் பகுதியில் இடவும்.")
-                lines.append("  2. வேர்ப் பகுதியில் நீர் தேங்காமல் வடிகால் வசதியை உறுதி செய்யவும்.")
-
-            # Specific Symptom 9: Flower & Fruit Drop
-            if has_flower_fruit_drop:
-                lines.append("• பூ & பிஞ்சு உதிர்தலைத் தடுக்க:")
-                lines.append("  1. பிளனோபிக்ஸ் (Planofix) 4.5 லிட்டர் தண்ணீருக்கு 1 மி.லி வீதம் பூக்கும் தருணத்தில் தெளிக்கவும்.")
-                lines.append("  2. போராக்ஸ் (Borax) 1 கிராம்/லிட்டர் தெளிப்பது காய் பிடிப்பை அதிகரிக்கும்.")
-
-            # Specific Symptom 10: Weather & Spray Advisory
-            if has_weather_query or alerts:
-                if alerts:
-                    lines.append(f"• வானிலை ஆலோசனை: {alerts[0].get('message_ta', 'மழை எச்சரிக்கை உள்ளது, மருந்து தெளிப்பதைத் தவிர்க்கவும்.')}")
-                else:
-                    lines.append("• தெளிப்பு நேரம்: காற்று வேகம் குறைவாக உள்ள காலை 7-10 மணி அல்லது மாலை 4-6 மணி வேளையில் மருந்து தெளிக்கவும்.")
-
-            # Crop-Specific General Fallback (when crop is identified but no specific symptom matched)
-            if len(lines) == 1:
-                if detected_crop_en == "Apple":
-                    lines.append("• ஆப்பிள் மர பராமரிப்பு வழிகாட்டல்:")
-                    lines.append("  1. மரத்தைச் சுற்றி 2 அடி தள்ளி களைகளை நீக்கி, போதிய சூரிய ஒளி மற்றும் காற்றோட்டம் கிடைப்பதை உறுதி செய்யவும்.")
-                    lines.append("  2. மட்கிய தொழு உரம் 15-20 கிலோவுடன் 19:19:19 (NPK) உரம் இடுவது கிளைகளின் வளர்ச்சியைத் தூண்டும்.")
-                    lines.append("  3. பூஞ்சை மற்றும் ஸ்கேப் நோய்த் தடுப்பிற்கு காப்பர் ஆக்சிகுளோரைடு அல்லது வேப்ப எண்ணெய் கரைசல் 15 நாட்களுக்கு ஒருமுறை தெளிக்கவும்.")
-                elif detected_crop_en == "Tomato":
-                    lines.append("• தக்காளி பயிர் பராமரிப்பு வழிகாட்டல்:")
-                    lines.append("  1. செடிகளுக்கு குச்சி ஊன்றி முட்டுக் கொடுத்து தரைமட்டத்தில் இலைகள் படாமல் காக்கவும்.")
-                    lines.append("  2. சொட்டு நீர் பாசனம் மூலம் சீரான ஈரப்பதத்தைப் பராமரித்து இலை சுருட்டை மற்றும் பூஞ்சை நோய்களைத் தவிர்க்கவும்.")
-                    lines.append("  3. 15 நாட்களுக்கு ஒருமுறை இயற்கை வேப்ப எண்ணெய் (3%) தெளித்து சாறு உறிஞ்சும் பூச்சிகளைக் கட்டுப்படுத்தவும்.")
-                elif detected_crop_en == "Paddy / Rice":
-                    lines.append("• நெற்பயிர் சிறந்த விளைச்சல் வழிகாட்டல்:")
-                    lines.append("  1. வயலில் 2-5 செ.மீ சீரான நீர்மட்டத்தைப் பராமரித்து, தூர் கட்டும் தருணத்தில் அசோஸ்பைரில்லம் உயிரி உரம் இடவும்.")
-                    lines.append("  2. இலைப்பேன் மற்றும் தண்டு துளைப்பான் தாக்கத்தைக் கண்காணிக்க இனக்கவர்ச்சிப் பொறிகளை அமைக்கவும்.")
-                else:
-                    lines.append("• பயிர் பாதுகாப்பு வழிகாட்டல்:")
-                    lines.append("  1. மண்ணின் ஈரப்பதத்தை சீராகப் பராமரித்து, வேர் பகுதியில் நீர் தேங்காமல் பார்த்துக் கொள்ளவும்.")
-                    lines.append("  2. இயற்கை மண்புழு உரம் மற்றும் நுண்ணூட்டச்சத்து கலவை இடுவது செடியின் நோய் எதிர்ப்பு சக்தியை அதிகரிக்கும்.")
-                    lines.append("  3. இயற்கை வேப்ப எண்ணெய் (3%) கரைசலை 15 நாட்களுக்கு ஒருமுறை தெளிக்கவும்.")
-
-            lines.append("• மேலதிக கள ஆய்வுக்கு உங்கள் பகுதி வேளாண் அறிவியல் நிலையத்தை (KVK) அணுகவும்.")
+            lines = [intro, "", "**உடனடியாக செய்ய வேண்டியவை:**"]
+            for act in actions:
+                lines.append(f"- {act}")
+            lines.append("")
+            lines.append(f"**குறிப்பு:** {note}")
             return "\n".join(lines)
 
-        # 4. Synthesize Tailored Response in English
+        # 4. Synthesize Tailored, Structured Response in English
         else:
-            lines = [f"🌾 AgroNex Agricultural Copilot Guidance{crop_header_en}:"]
-
             if has_schemes:
-                lines.append("• Key Government Agricultural Schemes:")
-                lines.append("  1. PM-KISAN: ₹6,000 annual direct income support in 3 equal installments.")
-                lines.append("  2. PMFBY (Pradhan Mantri Fasal Bima Yojana): Subsidized comprehensive crop insurance.")
-                lines.append("  3. Per Drop More Crop (Micro Irrigation): Up to 100% subsidy for drip/sprinkler setups.")
-                lines.append("• Visit your nearest Krishi Vigyan Kendra (KVK) or Agriculture Department to apply.")
-                return "\n".join(lines)
-
-            # Specific Symptom 1: Spots / Dots / Scab / Rust
-            if has_spots_dots or has_fungus_blight or cond:
+                intro = "Key Government Agricultural Schemes for farmer financial security and modernized farming support:"
+                actions = [
+                    "PM-KISAN (Pradhan Mantri Kisan Samman Nidhi): Provides ₹6,000 annual direct income support to eligible farmer families in three equal installments.",
+                    "PMFBY (Pradhan Mantri Fasal Bima Yojana): Low-premium comprehensive crop insurance protecting against unforeseen weather calamities, floods, and droughts.",
+                    "Per Drop More Crop (Micro-Irrigation): Offers up to 100% subsidy for small and marginal farmers on drip and sprinkler irrigation installations.",
+                    "Required Application Documents: Aadhaar card, land ownership record (patta/chitta), and active bank passbook."
+                ]
+                note = "Visit your nearest Block Agricultural Extension Office (ADA) or e-Sevai centre for application assistance."
+            elif has_yellowing or has_water_issue:
+                intro = f"Yellowing leaves on your {crop_name_en} can be caused by excess water, root rot, or nutrient deficiencies. A visual observation alone cannot confirm the exact underlying cause."
+                actions = [
+                    "Check whether your soil has proper drainage. Standing water rapidly suffocates roots and causes fungal root rot.",
+                    "Regulate irrigation based on soil moisture depth; water only when needed and avoid waterlogging.",
+                    "Prune and safely remove all yellowed, decaying leaves and debris from around the plant base.",
+                    "If nutrient deficiency is suspected, conduct a soil test or apply well-decomposed organic manure before selecting fertilizers.",
+                    "If root rot or fungal infection is suspected, drench the root zone with bio-fungicide Trichoderma viride (5g to 10g per litre of water).",
+                    "Avoid spraying foliar treatments if rainfall (>60% probability) is forecast within 24-48 hours or during high winds (>25 km/h).",
+                    "Do not apply unconfirmed chemical fungicides or pesticides until the exact cause is verified."
+                ]
+                note = "If the problem persists, consult your local Krishi Vigyan Kendra (KVK) or agricultural extension officer for certified on-site verification."
+            elif has_spots_dots or has_fungus_blight or cond:
                 cond_text = f" ({cond.replace('_', ' ')})" if cond else ""
-                if detected_crop_en == "Apple":
-                    lines.append("• Primary Causes for Dots / Spots on Apple Foliage:")
-                    lines.append("  1. Apple Scab (Venturia inaequalis fungus): Circular, olive-green to dark velvety brown spots/dots on upper leaf surfaces.")
-                    lines.append("  2. Cedar Apple Rust or Alternaria Leaf Spot: Bright yellow, orange, or reddish-brown specks.")
-                    lines.append("• Recommended Treatment & Control Plan:")
-                    lines.append("  1. Foliar Fungicide: Spray Mancozeb 75% WP (2g/L) or Copper Oxychloride (2.5g/L) thoroughly covering both leaf sides.")
-                    lines.append("  2. Orchard Hygiene: Rake up and safely burn or compost all fallen spotted leaves to break the fungal overwintering cycle.")
-                    lines.append("  3. Preventive Window: Apply Captan 50% WP (2g/L) every 12-14 days during humid flush periods to protect fresh leaves.")
-                elif detected_crop_en == "Tomato":
-                    lines.append("• Causes for Spots / Dots on Tomato Leaves:")
-                    lines.append("  1. Early Blight (Alternaria solani) target-board spots or Septoria leaf spot.")
-                    lines.append("• Treatment: Spray Mancozeb (2g/L) or Copper Oxychloride (2.5g/L) + Streptocycline (1g in 10L water).")
-                elif detected_crop_en == "Paddy / Rice":
-                    lines.append("• Paddy Leaf Spot / Blast Management:")
-                    lines.append("  1. Brown Spot (Helminthosporium) or Rice Blast lesions.")
-                    lines.append("• Treatment: Spray Tricyclazole 75% WP (1g/L) or Edifenphos (1ml/L) during calm morning hours.")
-                elif detected_crop_en == "Chilli":
-                    lines.append("• Chilli Anthracnose & Leaf Spot Management:")
-                    lines.append("• Treatment: Spray Carbendazim (1g/L) or Azoxystrobin (1ml/L) in late afternoon.")
-                else:
-                    lines.append(f"• Fungal & Foliar Spot Management{cond_text}:")
-                    lines.append("  1. Prune and safely destroy heavily spotted/infected foliage to stop spread.")
-                    lines.append("  2. Apply Copper Oxychloride (2.5g/L) or Mancozeb (2g/L) to prevent spore propagation.")
+                intro = f"Spots, specks, or blighting on your {crop_name_en} leaves are typically caused by foliar fungal or bacterial pathogens{cond_text}. A visual inspection alone cannot provide a 100% verified diagnosis."
+                actions = [
+                    "Prune and safely destroy heavily spotted or infected leaves to halt airborne fungal spore dissemination.",
+                    "Water directly at the root zone and avoid overhead irrigation to prevent moisture from sitting on foliage.",
+                    "Apply Copper Oxychloride (COC at 2.5g/L) or Mancozeb 75% WP (2g/L) thoroughly covering both leaf surfaces.",
+                    "For organic suppression, spray a 3% neem oil emulsion every 10 to 14 days during early morning or late afternoon.",
+                    "Postpone chemical spraying if rain (>60% probability) is forecast within 24-48 hours or if wind speed exceeds 25 km/h.",
+                    "Never spray chemical fungicides during intense midday sunlight to avoid leaf scorching."
+                ]
+                note = "If lesions continue spreading, submit a symptomatic leaf sample to your nearest Krishi Vigyan Kendra (KVK) for laboratory confirmation."
+            elif has_leaf_curl:
+                intro = f"Leaf curling on your {crop_name_en} is commonly triggered by sap-sucking insect vectors (thrips, whiteflies, aphids) or vector-transmitted viral infections."
+                actions = [
+                    "Install yellow and blue sticky traps (6-8 traps per acre) to monitor and capture flying sucking insect vectors.",
+                    "Apply a 3% neem oil emulsion (30ml in 10L water + mild soap) during calm evening hours.",
+                    "For severe infestations, apply recommended systemic insecticides such as Imidacloprid 17.8% SL (1ml per 3 litres of water).",
+                    "Uproot and safely incinerate severely stunted or virus-infected plants to prevent transmission to healthy crops.",
+                    "Avoid spraying when ambient wind exceeds 20 km/h to prevent spray drift."
+                ]
+                note = "Consult your local agricultural extension officer for regional integrated pest management (IPM) advisories."
+            elif has_white_mildew:
+                intro = f"The powdery white residue on your {crop_name_en} leaves indicates a powdery mildew fungal infection thriving in humid microclimates."
+                actions = [
+                    "Prune overcrowded interior branches to promote sunlight penetration and free airflow through the crop canopy.",
+                    "Spray Wettable Sulphur 80% WP at 3g/L or 3% neem oil emulsion in the late afternoon.",
+                    "Rake up and destroy fallen infected leaves to stop spores from overwintering in the soil.",
+                    "Avoid excessive nitrogen fertilizers which produce overly lush, disease-susceptible foliage."
+                ]
+                note = "If powdery coating persists, consult your local KVK expert for systemic fungicide recommendations."
+            elif has_wilting_drying or has_root_rot:
+                intro = f"Wilting or drying on your {crop_name_en} suggests vascular wilt (Fusarium/Pythium fungi) or root rot, often exacerbated by waterlogged soil conditions."
+                actions = [
+                    "Halt irrigation immediately and clear field drainage channels to facilitate rapid runoff.",
+                    "Drench the collar and root zone with bio-fungicide Trichoderma viride or Pseudomonas fluorescens (10g to 20g per plant).",
+                    "Incorporate well-cured neem cake (100-250g per plant) into the topsoil around the root circle to suppress soil pathogens.",
+                    "Carefully remove dead or heavily rotting plants to restrict pathogen expansion in the soil."
+                ]
+                note = "Have your field soil tested at the nearest Agricultural Extension Office to check for pathogen saturation."
+            elif has_pests:
+                intro = f"Your {crop_name_en} is showing signs of caterpillar, borer, or pest infestation damaging foliar or stem tissues."
+                actions = [
+                    "Inspect crop rows during early morning hours and physically remove visible caterpillars and egg clusters.",
+                    "Install pheromone traps and light traps across the field to monitor adult moth populations.",
+                    "Spray bio-pesticide Bacillus thuringiensis (Bt at 2g/L) or 5% neem seed kernel extract (NSKE).",
+                    "Rotate pesticide modes of action to prevent pest resistance and protect beneficial predatory insects."
+                ]
+                note = "If pest populations exceed the economic threshold level (ETL), seek guidance from your local agricultural extension officer."
+            elif has_fertilizer or has_growth_issue:
+                intro = f"Optimal nutrition is essential for vigorous vegetative growth and high yield in your {crop_name_en}. Nutrient imbalances can cause stunted development."
+                actions = [
+                    "Apply 10-15 kg of well-decomposed farmyard manure (FYM) or vermicompost around the drip line.",
+                    "Foliar spray balanced water-soluble 19:19:19 (NPK) fertilizer at 5g per litre of water to spur active vegetative shoots.",
+                    "Incorporate secondary and micronutrients such as Zinc Sulphate and Boron to prevent deficiency symptoms.",
+                    "Maintain uniform soil moisture through mulching to enhance root nutrient uptake efficiency."
+                ]
+                note = "Obtain an official Soil Health Card from your local agriculture department to tailor fertilizer dosages precisely."
+            elif has_weather_query or alerts:
+                alert_text = alerts[0].get('message_en', 'Rain forecasted.') if alerts else ""
+                intro = f"Agricultural Weather & Operational Advisory for your field{': ' + alert_text if alert_text else ''}."
+                actions = [
+                    "Postpone all chemical foliar spraying if rain (>60% probability) is forecast within 24-48 hours.",
+                    "Execute spraying operations only during calm morning (7-10 AM) or late afternoon (4-6 PM) hours when wind is <20 km/h.",
+                    "Ensure drainage ditches are clear to prevent water accumulation during sudden precipitation.",
+                    "Add an agricultural surfactant/sticker to spray solutions during overcast weather to improve adherence."
+                ]
+                note = "Track local weather updates before scheduling costly agrochemical field applications."
+            else:
+                intro = f"General Agronomic Care & Protective Management for your {crop_name_en}."
+                actions = [
+                    "Maintain consistent soil moisture without surface water accumulation to protect feeder roots.",
+                    "Incorporate organic vermicompost and balanced micronutrients to bolster natural plant resistance.",
+                    "Inspect the undersides of leaves weekly to spot early signs of sucking pests or fungal infection.",
+                    "Apply preventive 3% neem oil emulsion bi-weekly to maintain baseline biological protection."
+                ]
+                note = "For certified on-site diagnosis and soil testing, consult your local Krishi Vigyan Kendra (KVK)."
 
-            # Specific Symptom 2: Leaf Curl / Crinkling
-            if has_leaf_curl:
-                lines.append("• Causes & Control for Leaf Curl:")
-                lines.append("  1. Sucking pests (thrips, aphids, whitefly vectors) transmitting leaf curl viruses.")
-                lines.append("• Treatment: Spray Imidacloprid 17.8% SL at 1ml per 3 litres of water or 3% Neem oil emulsion.")
-
-            # Specific Symptom 3: White Powdery Mildew
-            if has_white_mildew:
-                lines.append("• Powdery Mildew Management:")
-                lines.append("  1. White talcum-like fungal coating across leaf canopy.")
-                lines.append("• Treatment: Spray Wettable Sulphur 80% WP (3g/L) or Hexaconazole (1ml/L).")
-
-            # Specific Symptom 4: Leaf Drop / Stunted Growth
-            if has_leaf_drop or (has_growth_issue and not has_spots_dots):
-                lines.append("• Primary Causes for Leaf Drop & Stunted Growth:")
-                lines.append("  1. Root Stress: Waterlogging or extreme root dryness leading to early root rot.")
-                lines.append("  2. Nutrient Deficiencies: Lack of vegetative Nitrogen, Zinc, or Boron.")
-
-            # Specific Symptom 5: Fertilizer / Nutrition
-            if has_fertilizer or (has_growth_issue and not has_spots_dots):
-                lines.append("• Recommended Fertilizer & Nutrition Schedule:")
-                lines.append("  1. Organic Base: Apply 10-15 kg well-decomposed FYM or vermicompost around the drip line.")
-                lines.append("  2. Foliar Booster: Spray 19:19:19 (NPK) water-soluble fertilizer at 5g per litre of water.")
-                lines.append("  3. Micronutrient Mix: Apply Zinc Sulphate and Boron to spur active vegetative shoots.")
-
-            # Specific Symptom 6: Yellowing / Chlorosis
-            if has_yellowing:
-                lines.append("• Correcting Yellowing / Chlorotic Foliage:")
-                lines.append("  1. Spray Epsom Salt (Magnesium Sulphate) at 5g/L to restore active chlorophyll synthesis.")
-                lines.append("  2. Apply chelated Iron/Zinc if interveinal yellowing persists.")
-
-            # Specific Symptom 7: Pests / Worms / Borers
-            if has_pests:
-                lines.append("• Integrated Pest Management:")
-                lines.append("  1. Spray 3% Neem oil emulsion (30ml in 10L water + mild soap) during calm evening hours.")
-                lines.append("  2. Install yellow and blue sticky traps (6-8 per acre) to intercept sucking insect vectors.")
-
-            # Specific Symptom 8: Wilting / Root Rot
-            if has_wilting_drying or has_root_rot:
-                lines.append("• Mitigating Vascular Wilt & Root Rot:")
-                lines.append("  1. Drench root zone with bio-fungicide Trichoderma viride (10-20g per plant).")
-                lines.append("  2. Improve soil aeration and ensure excess water drains freely.")
-
-            # Specific Symptom 9: Flower & Fruit Drop
-            if has_flower_fruit_drop:
-                lines.append("• Mitigating Flower & Fruit Drop:")
-                lines.append("  1. Spray Planofix (alpha naphthyl acetic acid) at 1ml per 4.5 litres of water.")
-                lines.append("  2. Supplement with Borax (1g/L) during flower bud initiation.")
-
-            # Specific Symptom 10: Weather & Spray Advisory
-            if has_weather_query or alerts:
-                if alerts:
-                    lines.append(f"• Weather Alert: {alerts[0].get('message_en', 'Rain forecasted. Postpone chemical foliar applications.')}")
-                else:
-                    lines.append("• Safe Spray Window: Spray only during calm morning (7-10 AM) or late afternoon (4-6 PM) when wind is <20 km/h.")
-
-            # Crop-Specific General Fallback (when crop is identified but no specific symptom matched)
-            if len(lines) == 1:
-                if detected_crop_en == "Apple":
-                    lines.append("• Apple Tree Care & Agronomic Plan:")
-                    lines.append("  1. Clear weeds 2 feet around the trunk and ensure adequate sunlight and canopy aeration.")
-                    lines.append("  2. Apply 15-20 kg decomposed manure + balanced 19:19:19 (NPK) to drive vegetative vitality.")
-                    lines.append("  3. Apply preventive copper spray or neem emulsion every 15 days to ward off fungal scab.")
-                elif detected_crop_en == "Tomato":
-                    lines.append("• Tomato Crop Care Guidance:")
-                    lines.append("  1. Provide wooden stakes to keep foliage elevated off wet ground.")
-                    lines.append("  2. Irrigate through drip lines to maintain steady moisture and avoid fungal spore splashes.")
-                    lines.append("  3. Spray 3% neem oil bi-weekly to deter leaf curl whitefly vectors.")
-                elif detected_crop_en == "Paddy / Rice":
-                    lines.append("• Paddy Field Management Plan:")
-                    lines.append("  1. Maintain 2-5 cm standing water depth and apply Azospirillum bio-fertilizer during tillering.")
-                    lines.append("  2. Install pheromone traps to monitor yellow stem borer flights.")
-                else:
-                    lines.append("• Agronomic Action Plan:")
-                    lines.append("  1. Maintain steady soil moisture without surface water accumulation.")
-                    lines.append("  2. Incorporate organic vermicompost and balanced micronutrients to strengthen natural plant immunity.")
-                    lines.append("  3. Inspect leaf undersides weekly for early pest colonies.")
-
-            lines.append("• For certified on-site verification, consult your local agricultural extension officer (KVK).")
+            lines = [intro, "", "**What to do now:**"]
+            for act in actions:
+                lines.append(f"- {act}")
+            lines.append("")
+            lines.append(f"**Note:** {note}")
             return "\n".join(lines)
 
     def answer(self, question: str, language: str = "en", context: dict = None) -> str:
@@ -476,9 +471,18 @@ class AIAssistant:
         try:
             prompt_modifier = ""
             if language == "ta":
-                prompt_modifier = "\nPlease answer primarily in Tamil or natural Tamil-English code-mix as used by Tamil Nadu farmers."
+                prompt_modifier = (
+                    "\nவிவசாயியின் கேள்விக்கு முழுமையான, நடைமுறை சார்ந்த விவசாய வழிகாட்டலை தமிழில் வழங்கவும். "
+                    "தேவையற்ற முகவுரைகள் அல்லது வாழ்த்துக்கள் இன்றி நேரடியாக பதிலளிக்கவும். "
+                    "சாத்தியமான காரணங்களை தெளிவாக விளக்கி, உடனடியாக செய்ய வேண்டிய நடைமுறை நடவடிக்கைகளை புல்லட் பாயிண்ட்களாகவும், "
+                    "தேவையான முன்னெச்சரிக்கை மற்றும் KVK சரிபார்ப்புக் குறிப்பையும் தெளிவாகத் தரவும்."
+                )
             elif language == "en":
-                prompt_modifier = "\nPlease answer in simple, direct English."
+                prompt_modifier = (
+                    "\nProvide a complete, structured, and practical agricultural explanation in simple, farmer-friendly English. "
+                    "Avoid unnecessary greetings or long introductory filler. Clearly explain the probable causes, provide immediate "
+                    "practical action steps as clear bullet points, and include necessary precautions and KVK extension verification."
+                )
 
             grounding_text = self._format_context_block(context) if context else ""
 

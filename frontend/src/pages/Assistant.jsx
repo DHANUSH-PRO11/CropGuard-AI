@@ -345,6 +345,58 @@ export default function Assistant() {
     setCapturedPhoto(null);
   };
 
+  const renderFormattedMessage = (text) => {
+    if (!text) return null;
+    const lines = text.split('\n');
+    return (
+      <div className="space-y-1 text-sm leading-relaxed">
+        {lines.map((line, idx) => {
+          if (!line.trim()) {
+            return <div key={idx} className="h-1.5" />;
+          }
+
+          // Format bold markers (**text**)
+          const parts = line.split(/(\*\*.*?\*\*)/g);
+          const renderedLine = parts.map((part, pIdx) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+              return (
+                <strong key={pIdx} className="font-semibold text-gray-900">
+                  {part.slice(2, -2)}
+                </strong>
+              );
+            }
+            return part;
+          });
+
+          // Check if bullet point (- or * or •)
+          const isBullet = /^\s*[-*•]\s+/.test(line);
+          if (isBullet) {
+            const bulletText = line.replace(/^\s*[-*•]\s+/, '');
+            const bulletParts = bulletText.split(/(\*\*.*?\*\*)/g);
+            return (
+              <div key={idx} className="flex items-start gap-2 pl-1 my-0.5">
+                <span className="text-agronex-primary font-bold mt-1 text-xs">•</span>
+                <span className="flex-1">
+                  {bulletParts.map((bp, bpIdx) =>
+                    bp.startsWith('**') && bp.endsWith('**') ? (
+                      <strong key={bpIdx} className="font-semibold text-gray-900">
+                        {bp.slice(2, -2)}
+                      </strong>
+                    ) : (
+                      bp
+                    )
+                  )}
+                </span>
+              </div>
+            );
+          }
+
+          return <div key={idx}>{renderedLine}</div>;
+        })}
+      </div>
+    );
+  };
+
   // Helper: Encode raw Float32 audio samples into standard 16kHz mono 16-bit PCM WAV Blob
   const encodeWavBlob = (buffers, inputSampleRate = 48000) => {
     if (!buffers || buffers.length === 0) return null;
@@ -722,40 +774,87 @@ export default function Assistant() {
     e.target.value = '';
   };
 
-  // Audio Playback for Chat Messages
-  const playAudio = (id, audioSrc) => {
+  // Audio Playback for Chat Messages (Sarvam Bulbul v3 with Web Speech API fallback)
+  const playAudio = (id, audioSrc, textToSpeak, lang) => {
     if (activeAudioId === id && isPlayingAudio) {
       if (audioPlayerRef.current) {
         audioPlayerRef.current.pause();
       }
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
       setIsPlayingAudio(false);
+      setActiveAudioId(null);
       return;
     }
 
     if (audioPlayerRef.current) {
       audioPlayerRef.current.pause();
     }
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
 
-    const audio = new Audio(audioSrc);
-    audioPlayerRef.current = audio;
-    setActiveAudioId(id);
-    setIsPlayingAudio(true);
+    // 1. If audioSrc (Sarvam Bulbul v3) is available, play WAV audio
+    if (audioSrc) {
+      const audio = new Audio(audioSrc);
+      audioPlayerRef.current = audio;
+      setActiveAudioId(id);
+      setIsPlayingAudio(true);
 
-    audio.onended = () => {
-      setIsPlayingAudio(false);
-      setActiveAudioId(null);
-    };
+      audio.onended = () => {
+        setIsPlayingAudio(false);
+        setActiveAudioId(null);
+      };
 
-    audio.onerror = (e) => {
-      console.error("Audio playback error:", e);
-      setIsPlayingAudio(false);
-      setActiveAudioId(null);
-    };
+      audio.onerror = (e) => {
+        console.error("Audio playback error:", e);
+        setIsPlayingAudio(false);
+        setActiveAudioId(null);
+      };
 
-    audio.play().catch(err => {
-      console.warn("Audio play blocked:", err);
-      setIsPlayingAudio(false);
-    });
+      audio.play().catch(err => {
+        console.warn("Audio play blocked:", err);
+        setIsPlayingAudio(false);
+        setActiveAudioId(null);
+      });
+      return;
+    }
+
+    // 2. Fallback to browser Web Speech API if cloud TTS audio is unavailable
+    if (textToSpeak && typeof window !== 'undefined' && window.speechSynthesis) {
+      try {
+        const cleanText = textToSpeak.replace(/[*_#•🌾🎤📷🤖⚠️✅🌱💧☀️💡]/g, ' ').replace(/\s+/g, ' ').trim();
+        const utterance = new SpeechSynthesisUtterance(cleanText);
+        const speechLang = lang && lang.includes('ta') ? 'ta-IN' : 'en-IN';
+        utterance.lang = speechLang;
+        utterance.rate = 0.95;
+
+        const voices = window.speechSynthesis.getVoices();
+        const matched = voices.find(v => v.lang.startsWith(speechLang) || v.lang.startsWith(speechLang.split('-')[0]));
+        if (matched) {
+          utterance.voice = matched;
+        }
+
+        utterance.onend = () => {
+          setIsPlayingAudio(false);
+          setActiveAudioId(null);
+        };
+
+        utterance.onerror = () => {
+          setIsPlayingAudio(false);
+          setActiveAudioId(null);
+        };
+
+        setActiveAudioId(id);
+        setIsPlayingAudio(true);
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        console.warn("Web Speech API playback failed:", err);
+        setIsPlayingAudio(false);
+        setActiveAudioId(null);
+      }
+    }
   };
 
   // ----------------------------------------------------
@@ -1238,14 +1337,14 @@ export default function Assistant() {
               )}
 
               {/* Message text */}
-              <div className="whitespace-pre-wrap">{msg.text}</div>
+              <div className="whitespace-pre-wrap">{renderFormattedMessage(msg.text)}</div>
 
               {/* AI Voice playback button */}
-              {msg.type === 'ai' && msg.audioBase64 && (
+              {msg.type === 'ai' && msg.text && (
                 <div className="mt-2.5 pt-2 border-t border-gray-100 flex items-center justify-between">
                   <button
                     type="button"
-                    onClick={() => playAudio(`ai-${msg.id}`, `data:audio/wav;base64,${msg.audioBase64}`)}
+                    onClick={() => playAudio(`ai-${msg.id}`, msg.audioBase64 ? `data:audio/wav;base64,${msg.audioBase64}` : null, msg.text, msg.detectedLanguage || i18n.language)}
                     className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-agronex-primary/10 text-agronex-primary hover:bg-agronex-primary hover:text-white transition-all shadow-xs"
                   >
                     {activeAudioId === `ai-${msg.id}` && isPlayingAudio ? (
