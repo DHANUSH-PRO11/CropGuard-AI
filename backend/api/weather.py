@@ -5,6 +5,7 @@ from services.weather_service import WeatherService
 router = APIRouter()
 weather_service = WeatherService()
 
+@router.get("")
 @router.get("/")
 @router.get("/forecast")
 async def get_forecast(
