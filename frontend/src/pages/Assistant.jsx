@@ -795,8 +795,8 @@ export default function Assistant() {
       window.speechSynthesis.cancel();
     }
 
-    // 1. If audioSrc (Sarvam Bulbul v3) is available, play WAV audio
-    if (audioSrc) {
+    // 1. If audioSrc (Sarvam Bulbul v3 data URI or recorded Blob URL) is available, play audio
+    if (audioSrc && typeof audioSrc === 'string' && (audioSrc.startsWith('blob:') || audioSrc.startsWith('data:') || audioSrc.startsWith('http://') || audioSrc.startsWith('https://'))) {
       const audio = new Audio(audioSrc);
       audioPlayerRef.current = audio;
       setActiveAudioId(id);
