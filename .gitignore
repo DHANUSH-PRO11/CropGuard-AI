@@ -43,7 +43,10 @@ backend/models/*.bak
 
 # Local databases and uploads
 *.db
+backend/agronex.db
+agronex.db
 uploads/
+backend/uploads/
 
 # Local test audio files
 *.wav

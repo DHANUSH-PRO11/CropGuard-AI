@@ -186,17 +186,20 @@ docker compose up --build
 ## 🧪 Automated Testing
 
 ### 1. Full Backend Automated Test Suite
-Runs all 28 automated unit, workflow, and end-to-end verification tests:
+Runs all 32 automated unit, workflow, and end-to-end verification tests:
 ```bash
 cd backend
 python -m unittest discover -s tests -p "test_*.py"
+# Or using pytest:
+pytest tests/ -v
 ```
-*Expected: 28/28 tests passing (`Ran 28 tests ... OK`).*
+*Expected: 32/32 tests passing (`OK`).*
 
 Included test suites:
 - `tests/test_api_endpoints.py`: Auth, profiles, schemes, weather, assistant endpoints & SQLite persistence (12 tests)
 - `tests/test_agent_workflow.py`: AgentFoundry 10-node multimodal autonomous copilot loop (6 tests)
 - `tests/test_e2e_verification.py`: Full end-to-end integration and edge-case validation (10 tests)
+- `tests/test_sarvam_integration.py`: Sarvam AI multimodal STT, TTS, and reasoning integration (4 tests)
 
 ### 2. Computer Vision Preprocessing Suite
 Validates 12 edge-case scenarios including EXIF transpositions, blur Laplacian variance, overexposure clipping, low light, and Test-Time Augmentation (TTA):
